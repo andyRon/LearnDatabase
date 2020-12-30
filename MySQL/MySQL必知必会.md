@@ -1,7 +1,6 @@
+《MySQL必知必会》笔记
+-----------
 MySQL Crash Course 
-
-## 《MySQL必知必会》笔记
-
 
 
 MySQL 三种注释：
@@ -14,7 +13,16 @@ MySQL 三种注释：
 
 
 
-### 1.了解SQL
+预建立的表([crashcourse.sql](crashcourse.sql))：
+
+> customers			顾客表
+> orders					订单表
+> orderitems			订单产品表
+> products				产品表
+> vendors				 供应商表
+> productnotes		产品注释表
+
+### 1 了解SQL
 
 数据库是通过数据库软件**DBMS**(数据库管理系统)创建和操纵的容器。这个容器可以是文件，也可以不是。使用者通过DBMS访问数据库。
 
@@ -22,7 +30,7 @@ MySQL 三种注释：
 
 **主键（primary key）** ： 一列（或一组列），其值能够唯一区分表中的每一行。 
 
-### 2.MySQL简介
+### 2 MySQL简介
 
 DBMS分两类：基于共享文件系统（Microsoft Access、FileMaker）；基于客户机-服务器（mysql,oracle）。  
 
@@ -34,7 +42,7 @@ DBMS分两类：基于共享文件系统（Microsoft Access、FileMaker）；基
 
 以`\G`结束，会使原本横向输出的变成纵向输出，易于观看。
 
-```bash
+```mysql
 mysql> select * from customers\G
 *************************** 1. row ***************************
      cust_id: 10001
@@ -58,7 +66,7 @@ cust_contact: Jerry Mouse
   cust_email: NULL
 ```
 
-### 3.使用MySQL
+### 3 使用MySQL
 
 连接MySQL：
 
@@ -72,6 +80,9 @@ create user "username"@"host" identified by "password";
 
 -- 查看当前所有用户
 select user,host from mysql.user;
+
+-- 查看MySQL版本
+select version();
 
 -- 新建数据库(两者等价)
 create database  <数据库名>;
@@ -110,56 +121,69 @@ show columns from tablename;
 -- 等价于
 describe tablename;
 
+-- 直接运行sql文件
+source .../**.sql
 ```
-`show errors;` 和`show warnings;`
+```mysql
+show errors;
 
- `help show;`
+show warnings;
+```
 
-`source .../**.sql`    直接运行sql文件
+```mysql
+help
 
+help show;
+```
 
+### 4 检索数据
 
+```mysql
+-- DISTINCT 关键字用来显示对应列不同数据。
+select distinct vend_id,prod_price from products;
 
-### 4.检索数据
-
-`select distinct vend_id,prod_price from products;`   `DISTINCT` 关键字用来显示对应列不同数据。
+-- 限定表名和列名
+select products.prod_name from crashcourse.products;
+```
 
 `limit  3`    限制少于三行 
 `limit  1,3`  等价于 `limit 3 offset 1 `  从1行开始的三行
 
-`select products.prod_name from crashcourse.products;`  限定表名和列名
+### 5 排序检索数据
 
-### 5.排序检索数据
+```mysql
+select prod_name from products order by prod_name;  
 
-`select prod_name from products order by prod_name;`   
+-- 多个列排序，仅在多个行具有相同的prod_price值时才对产品按prod_name进行排序
+select prod_id, prod_price, prod_name from products order by prod_price, prod_name;    
 
-`select prod_id, prod_price, prod_name from products order by prod_price, prod_name;`    多个列排序，仅在多个行具有相同的prod_price值时才对产品按prod_name进行排序
+-- 指定排序方向
+select prod_id, prod_price, prod_name from products order by prod_price DESC;  
+```
 
-`select prod_id, prod_price, prod_name from products order by prod_price DESC;`    指定排序方向
+### 6 过滤数据
 
+```mysql 
+-- 空值检查 
+select prod_name from products where prod_price IS NULL;
 
+-- 注意and计算顺序高， 前面要加括号
+select prod_name, prod_price from products where (vend_id = 1002 or vend_id = 1003) and prod_price >= 10;
 
-### 6.过滤数据
+select prod_name, prod_price from products where vend_id in (1002,1003) order by prod_name;
+
+-- 在5到10之间 IN比OR快，计算次序易管理，in还可以包括其他select语句  
+select prod_name, prod_price from products where prod_price between 5 and 10;`  
+
+-- MYSQL支持使用NOT对IN，BETWEEN和EXISTS子句取反
+select prod_name, prod_price, from products where vend_id NOT IN (1002, 1003) order by prod_name;
+```
 
 `order by` 在 `where`后面。
 
 `where`子句中的操作符， `=` `<>` `!=` `<` `>` `>=` `<=` `between`
 
-`select prod_name from products where prod_price IS NULL;` 空值检查 
-
-`select prod_name, prod_price from products where (vend_id = 1002 or vend_id = 1003) and prod_price >= 10;`  注意and计算顺序高， 前面要加括号
-
-`select prod_name, prod_price from products where vend_id in (1002,1003) order by prod_name;` 
-
-`select prod_name, prod_price from products where prod_price between 5 and 10;`  在5到10之间 IN比OR快，计算次序易管理，in还可以包括其他select语句  
-
-`select prod_name, prod_price, from products where vend_id NOT IN (1002, 1003) order by prod_name;`
-
-MYSQL支持使用NOT对IN，BETWEEN和EXISTS子句取反。
-
-
-
-### 8.通配符过滤
+### 8 通配符过滤
 
 `like`  语句一般都要用通配符，不然没有多大意义 
 
@@ -172,13 +196,17 @@ MYSQL支持使用NOT对IN，BETWEEN和EXISTS子句取反。
 慎用通配符；尽量不要在模式的开始使用；
 
 
-### 9.正则匹配
+### 9 正则匹配
 
 mysql正则仅为正则表达式的一个很小的子集，不区分大小写。
 
-`select prod_name from products where prod_name REGEXP'1000' order by prod_name;`  包含1000的
+```mysql
+-- 包含1000的匹配几个字符之一
+select prod_name from products where prod_name REGEXP'1000' order by prod_name;  
+```
 
-匹配几个字符之一
+
+
 ```mysql
 mysql> select prod_name from products where prod_name REGEXP '[123] Ton';
 +-------------+
@@ -244,15 +272,7 @@ mysql> select prod_name from products where prod_name regexp '[:digit:]' ;
 +----------------+
 ```
 
-
-
-
-
-
-
 #### 匹配多个实例 
-
-
 
 ```mysql
 mysql> select prod_name from products where prod_name regexp '\\([0-9] sticks?\\)' order by prod_name;
@@ -263,8 +283,6 @@ mysql> select prod_name from products where prod_name regexp '\\([0-9] sticks?\\
 | TNT (5 sticks) |
 +----------------+
 ```
-
-
 
 ```mysql
 mysql> select prod_name from products where prod_name regexp '[[:digit:]]{4}' order by prod_name;
@@ -291,9 +309,7 @@ mysql> select prod_name from products where prod_name regexp '^[0-9\\.]';
 +--------------+
 ```
 
-
-
-### 10.创建计算字段
+### 10 创建计算字段
 
 字段的计算（总数，平均数等），拼接等操作，DBMS能够快速有效地完成。
 
@@ -334,17 +350,17 @@ mysql> select prod_id, quantity, item_price, quantity*item_price  AS expanded_pr
 
 测试计算（没有from的select语句） `select 3*2;` `select now();`
 
-### 11.使用数据处理函数
+### 11 使用数据处理函数
 
 **函数没有SQL的可移植性强**。
 
 #### 文本处理函数 
 
 ```mysql
-left()  right()  length()  locate()  lower()  upper()  ltrim() rtrim()  sounder()  substring()
+left()  right() length() locate()  lower()  upper()  ltrim() rtrim()  sounder()  substring()
 ```
 
-
+![](../images/learn-database-020.jpg)
 
 ```mysql
 mysql> select vend_name, Upper(vend_name) AS vend_name_upcase from vendors order by vend_name;
@@ -360,8 +376,6 @@ mysql> select vend_name, Upper(vend_name) AS vend_name_upcase from vendors order
 +----------------+------------------+
 ```
 
-
-
 #### 日期和时间处理函数
 
  ```mysql
@@ -375,35 +389,15 @@ mysql> select cust_id, order_num from orders where Date(order_date) Between '200
 +---------+-----------+
  ```
 
-
-
-常用日期和时间处理函数 
-
-now() 返回当前日期和时间  
-curdate()  
-curtime() 以上三个函数不需要参数  
-date() 返回datatime数据类型（日期时间）的日期部分  
-time() 返回datatime数据类型（日期时间）的时间部分  
-day()  
-dayofweek()  
-hour()  
-minute()  
-month()  
-second()  
-year() 
+![](../images/learn-database-021.jpg)
 
 #### 数值处理函数
 
-pi() 不需要参数  
-rand() 不需要参数  
-abs()  
-cos() sin()  
-exp() mod() sqrt()  
-tan()
+![](../images/learn-database-022.jpg)
 
-### 12.汇总数据
+### 12 汇总数据
 
-#### 聚集函数
+#### 12.1 聚集函数
 
 | 函数    | 说明                                           |
 | ------- | ---------------------------------------------- |
@@ -422,7 +416,7 @@ tan()
 | 1368.34 |
 +---------+
 </pre>
-#### 聚集不同值 
+#### 12.2 聚集不同值 
 
 DISTINCT
 
@@ -436,13 +430,12 @@ mysql> select avg(distinct prod_price) as avg_price  from products where vend_id
 ```
 
 
-
-
 distinct 不能用于count(*),并且用于max()和min()没有多大意义。
 
-#### 组合聚集函数
+#### 12.3 组合聚集函数
 
-<pre>mysql> select count(*) as num_items,
+```mysql
+mysql> select count(*) as num_items,
     -> min(prod_price) as price_min,
     -> max(prod_price) as price_max,
     -> avg(prod_price) as price_avg
@@ -452,13 +445,12 @@ distinct 不能用于count(*),并且用于max()和min()没有多大意义。
 +-----------+-----------+-----------+-----------+
 |        14 |      2.50 |     55.00 | 16.133571 |
 +-----------+-----------+-----------+-----------+
-</pre>
+```
 
 
 
 
-
-### 13.分组数据
+### 13 分组数据
 
 #### group by
 
@@ -518,16 +510,10 @@ mysql> select vend_id, count(*) as num_prods from products where prod_price >=10
 
 #### select子句顺序
 
-<pre>SELECT
-FROM
-WHERE
-GROUP BY
-HAVING
-ORDER BY
-LIMIT
-</pre>
+![](../images/learn-database-023.jpg)
 
-### 14.子查询
+
+### 14 子查询
 
 #### 使用子查询进行过滤
 
@@ -582,7 +568,7 @@ Order by cust_name;
 
 **相关子查询**(correlated subquery):涉及外部查询的子查询。(orders.cust_id = customers.cust_id) 有点来消除歧义。
 
-### 15.联结表
+### 15 联结表
 
 SQL最强大的功能之一就是能在数据检索查询的执行中**联结(join)**表。
 
@@ -678,9 +664,7 @@ where order_num in(select order_num from orderitems
 
 > 性能可能会受操作类型、表中数据量、是否存在索引或键以及其他一些条件的影响。
 
-
-
-### 16.高级联结
+### 16 高级联结
 
 #### 表别名
 
@@ -825,7 +809,7 @@ group by customers.cust_id;
 ```
 
 
-### 17.组合查询
+### 17 组合查询
 
 > **并**(union)或**组合查询**(compund query)：执行多个查询（多条select语句），并将结果作为单个查询结果集返回。
 
@@ -863,11 +847,7 @@ UNION自动去除重复的行，UNOIN ALL则不。
 
 组合查询可以组合不同的表。
 
-
-
-
-
-### 18.全文搜索
+### 18 全文搜索
 
 MYISAM支持全文搜索，InnoDB不支持。
 
@@ -1563,14 +1543,42 @@ end;
 
 ### 26 事务
 
-1.  设计良好的数据库模式都是关联的。 事务处理要来保证数据库不包含不完整的操作结果。 
-    *   事务(transaction)
-    *   回退(rollback)
-    *   提交(commit)
-    *   保留点(savepoint)
-2.  控制事务处理
+#### 26.1 事务处理
 
- 关键在于将SQL语句组分解为逻辑块，并明确规定数据何时应该回退，何时不应该回退。
+事务处理（transaction processing）可以用来维护数据库的完整性，它保证成批的MySQL操作要么完全执行，要么完全不执行。
+
+设计良好的数据库模式都是关联的。 事务处理要来保证数据库不包含不完整的操作结果。 
+
+给系统添加订单的过程如下：
+
+(1) 检查数据库中是否存在相应的客户，如果不存在，添加他/她。
+
+(2) 提交客户信息。
+
+(3) 检索客户的ID。
+
+(4) 添加一行到orders表。
+
+(5) 如果在添加行到orders表时出现故障，回退。
+
+(6) 检索orders表中赋予的新订单ID。
+
+(7) 对于订购的每项物品，添加新行到orderitems表。
+
+(8) 如果在添加新行到orderitems时出现故障，回退所有添加的orderitems行和orders行。
+
+(9) 提交订单信息。
+
+几个术语：
+
+*   **事务**(transaction)：一组SQL语句
+*   **回退**(rollback)：撤销指定SQL语句的过程
+*   **提交**(commit)：将未存储的SQL语句结果写入数据库表
+*   **保留点**(savepoint)：事务处理中设置的临时占位符（place-holder），你可以对它发布回退（与回退整个事务处理不同）
+
+#### 26.2 控制事务处理
+
+ 管理事务处理的关键在于**将SQL语句组分解为逻辑块**，并明确规定数据何时应该回退，何时不应该回退。
 
 ```mysql 
 Select * from ordertotals; 
@@ -1594,7 +1602,7 @@ Commit;
 
 ### 27 全球化和本地化
 
-#### 字符集和校对顺序
+#### 27.1 字符集和校对顺序
 
 **字符集** 字母和符号的集合 
 
@@ -1602,7 +1610,7 @@ Commit;
 
 **校对** 规定字符如何比较的指令（在order by，group by ，having等数据排序起作用） 
 
-#### 使用字符集和校对顺序
+#### 27.2 使用字符集和校对顺序
 
 ```mysql
 -- 查看字符集完整列表 
@@ -1625,12 +1633,6 @@ create table mytable
  collate hebrew_general_ci;
 ```
 
-
-
-
-
-
-
 也可指定特定列
 
 指定特定的校对用于排序（下面是为了区分大小写） 
@@ -1645,25 +1647,35 @@ select * from customers order by lastname, firstname collate latin1_general_cs;
 
 #### 访问控制
 
-#### 管理用户
+#### 28.2 管理用户
 
-- 获得所有用户(尽量不要直接操作*mysql*表) `use mysql; select user form user;` - 创建删除用户 `create user ben identified by '123456';` `rename user ben to bens;` `drop user ben;` - 设置访问权限(grants, revoke) * 看某用户的权限：
+```mysql
+-- 获得所有用户(尽量不要直接操作mysql表)
+Use mysql;
+Select user From user;
 
- `shwo grants for ben;` (usage表示没有权限)
+-- 创建用户账号
+Create User andy Identified By '123456';
 
-+------------------------------------------------------------------------------- ---------------------+ | Grants for ben@% | +------------------------------------------------------------------------------- ---------------------+ | GRANT USAGE ON *.* TO 'ben'@'%' IDENTIFIED BY PASSWORD '*6BB4837EB74329105EE45 68DDA7DC67ED2CA2AD9' | +-------------------------------------------------------------------------------
+-- 重命名用户账号
+Rename User andy To andyron;
 
- ---------------------+
+-- 删除用户账号
+Drop User andyron;
+```
 
-*   grant用法需要：*要授权的权限* *被授予访问权限的数据库或表* *用户名* `grant select on crashcourse.* to ben;` (ben在crashcourse数据库的所有表上有select权限)
-*   撤销权限 `revoke select on crashcourse.* from ben;`
-*   grant,revoke 可在几个层次上控制权限： 
-    *   整个服务器(grant all, revoke all)
-    *   整个数据库(on database.*)
-    *   特定表(on database.table)
-    *   特定列
-    *   特定存储过程
-*   更改用户口令 `set password for ben=Password('newpasswd');`
+```mysql
+-- 查看用户账号的权限
+mysql> Show Grants For andy;
++----------------------------------+
+| Grants for andy@%                |
++----------------------------------+
+| GRANT USAGE ON *.* TO `andy`@`%` |
++----------------------------------+
+1 row in set (0.01 sec)
+```
+
+
 
 ### 29 数据库维护
 
@@ -1695,11 +1707,7 @@ select * from customers order by lastname, firstname collate latin1_general_cs;
 
 ### 30 改善性能
 
-
-
-
-
-[1]: dev.mysql.com/doc/mysql/en/error-handling.html
+https://dev.mysql.com/doc/mysql/en/error-handling.html
 
 
 
