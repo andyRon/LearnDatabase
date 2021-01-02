@@ -469,9 +469,70 @@ else
 
 ### 3.1 参数文件
 
-动态（dynamic）参数
+当MySQL实例启动时，数据库会先去读一个配置参数文件，用来**寻找数据库的各种文件所在位置以及指定某些初始化参数**，这些参数通常定义了某种内存结构有多大等。
 
-静态（static）参数
+MySQL配置文件读取顺序查看：
+
+```shell
+$ mysql --help | grep my.cnf
+                      order of preference, my.cnf, $MYSQL_TCP_PORT,
+/etc/my.cnf /etc/mysql/my.cnf /usr/local/mysql/etc/my.cnf ~/.my.cnf
+```
+
+MySQL实例启动时，没有参数文件会都读取编译时指定的默认值和源代码中指定参数的默认值。
+
+MySQL的**mysql架构**(也就是默认名为`mysql`的数据库)中记录了访问该实例的权限，当找不到这个架构时，MySQL实例不会成功启动。
+
+#### 什么是参数
+
+可以把数据库参数看成一个键/值（key/value）对。
+
+```mysql
+-- 查看数据库中所有参数，通过Like过滤
+Show Variables\G;
+
+-- 也可以通过information_schema架构下的GLOBAL_VARIABLES视图来进行查找参数
+Select * From  GLOBAL_VARIABLES Where VARIABLE_NAME Like 'innodb_buffer_pool_size'\G;
+```
+
+#### 参数类型
+
+动态（dynamic）参数：以在MySQL实例运行中进行更改；
+
+静态（static）参数：在整个实例生命周期内都不得进行更改，也就是只读。
+
+可以通过SET命令对动态的参数值进行修改，SET的语法如下：
+
+```mysql
+SET￼  
+| [global | session] system_var_name= expr￼    
+| [@@global. | @@session. | @@] system_var_name= expr
+```
+
+global和session关键字，表明参数的修改是基于**当前会话**还是**整个实例的生命周期**。
+
+有些动态参数只能在会话中进行修改，如autocommit；
+
+而有些参数修改完后，在整个实例生命周期中都会生效，如binlog_cache_size；
+
+而有些参数既可以在会话中又可以在整个实例的生命周期内生效，如read_buffer_size。
+
+例子：
+
+```mysql 
+mysql>SET read_buffer_size=524288;￼
+Query OK, 0 rows affected (0.00 sec)￼     mysql>SELECT @@session.read_buffer_size\G;￼
+*************************** 1. row ***************************￼    @@session.read_buffer_size: 524288￼
+1 row in set (0.00 sec)￼
+mysql>SELECT @@global.read_buffer_size\G;￼
+*************************** 1. row ***************************
+@@global.read_buffer_size: 2093056￼
+1 row in set (0.00 sec)
+```
+
+对变量的全局值进行了修改，在这次的实例生命周期内都有效，但MySQL实例本身并不会对参数文件中的该值进行修改。也就是说，在下次启动时MySQL实例还是会读取参数文件。若想在数据库实例下一次启动时该参数还是保留为当前修改的值，那么用户必须去修改参数文件。
+
+**Dynamic System Variables**：MySQL所有动态变量的可修改范围。
 
 ### 3.2 日志文件
 
@@ -479,39 +540,101 @@ else
 
 #### 错误日志（error log）
 
+```mysql
+mysql> SHOW VARIABLES LIKE 'log_error'\G;
+*************************** 1. row ***************************
+Variable_name: log_error
+        Value: /usr/local/mysql/data/mysqld.local.err
+1 row in set (0.00 sec)
+```
 
+当出现MySQL数据库不能正常启动时，第一个必须查找的文件应该就是错误日志文件，该文件记录了错误信息，能很好地指导用户发现问题。
 
-#### 二进制日志（binlog）
+```shell 
+$ tail -n 50 /usr/local/mysql/data/mysqld.local.err
+```
 
-
+通过错误日志得到一些关于数据库优化的信息。
 
 #### 慢查询日志（slow query log）
+
+慢查询日志可帮助DBA定位可能存在问题的SQL语句，从而进行SQL语句层面的优化。
+
+通过参数`long_query_time`（默认是10s）来设置一个阈值，将运行时间超过该值的所有SQL语句都记录到慢查询日志文件中。DBA每天或每过一段时间对其进行检查，确认是否有SQL语句需要进行优化。
+
+```mysql
+SHOW VARIABLES LIKE 'long_query_time'\G;
+```
+
+`log_queries_not_using_indexes`
+
+`log_throttle_queries_not_using_indexes`
+
+```shell
+# mysqldumpslow **-slow.log
+```
 
 
 
 #### 查询日志（log）
 
+查询日志记录了所有对MySQL数据库请求的信息，无论这些请求是否得到了正确的执行。
 
+#### 二进制日志（binlog）
+
+二进制日志（binary log）记录了对MySQL数据库执行更改的所有操作，但是不包括SELECT和SHOW这类操作，因为这类操作对数据本身并没有修改。
+
+二进制日志的作用：
+
+- **恢复**（recovery）：某些数据的恢复需要二进制日志，例如，在一个数据库全备文件恢复后，用户可以通过二进制日志进行point-in-time的恢复。
+- **复制**（replication）：其原理与恢复类似，通过复制和执行二进制日志使一台远程的MySQL数据库（一般称为slave或standby）与一台MySQL数据库（一般称为master或primary）进行实时同步。
+- **审计**（audit）：用户可以通过二进制日志中的信息来进行审计，判断是否有对数据库进行注入的攻击。
 
 ### 3.3 套接字文件
 
+在UNIX系统下本地连接MySQL可以采用UNIX域套接字方式，这种方式需要一个套接字（socket）文件。套接字文件可由参数socket控制。一般在/tmp目录下，名为mysql.sock：
 
+```mysql
+mysql> SHOW VARIABLES LIKE 'socket'\G;
+*************************** 1. row ***************************
+Variable_name: socket
+        Value: /tmp/mysql.sock
+1 row in set (0.00 sec)
+```
 
 ### 3.4 pid文件
+
+pid文件：当MySQL实例启动时，会将自己的进程ID写入一个文件中。
+
+该文件可由参数pid_file控制，默认位于数据库目录下，文件名为主机名.pid：
+
+```mysql
+mysql> SHOW VARIABLES LIKE 'pid_file'\G;
+*************************** 1. row ***************************
+Variable_name: pid_file
+        Value: /usr/local/mysql/data/mysqld.local.pid
+1 row in set (0.00 sec)
+```
 
 
 
 ### 3.5 表结构定义文件
 
+MySQL数据的存储是根据表进行的，每个表都会有与之对应的文件。但无论采用何种存储引擎，表结构定义都存储在一个`.frm`文件里。
 
+`.frm`还用来存储视图的定义，例如用户创建了一个v_a视图，那么对应地会产生一个v_a.frm文件，用来记录视图的定义，该文件是文本文件，可以直接使用cat命令进行查看：
+
+```shell
+
+```
 
 ### 3.6 InnoDB存储引擎文件
 
-
+每个表存储引擎还有其自己独有的文件。
 
 #### 表空间文件
 
-
+![](../images/learn-database-024.jpg)
 
 #### 重做日志文件
 
@@ -519,15 +642,53 @@ else
 
 ## 4 表
 
-
+数据在表中是如何组织和存放的。
 
 ### 4.1 索引组织表
 
+在InnoDB存储引擎中，**表都是根据主键顺序组织存放的**，这种存储方式的表称为**索引组织表（index organized table）**。
 
+每张表都有个**主键（Primary Key）**，如果在创建表时没有显式地定义主键，则会按如下方式选择或创建主键：
+
+1. 首先判断表中是否有非空的唯一索引（Unique NOTNULL），如果有，则该列即为主键，如果有多个，则建表时第一个定义的为主键（**注**：是定义索引的顺序，不是建表时列的顺序）。
+2. 如果不符合上述条件，InnoDB存储引擎自动创建一个6字节大小的指针。
+
+```mysql
+ Create Table z (
+  a INT NOT NULL,
+  b INT  NULL,
+  c INT NOT NULL,
+  d INT NOT NULL,
+  Unique Key (b),
+  Unique Key (d), Unique Key (c)
+);
+
+Insert Into z Select 1,2,3,4;
+Insert Into z Select 5,6,7,8;
+Insert Into z Select 9,10,11,12;
+```
+
+b列允许NULL值，所以d列是主键。可通过`_rowid`来查看单个列为主键的表：
+
+```mysql
+mysql> Select a,b,c,d,_rowid From z;
++---+------+----+----+--------+
+| a | b    | c  | d  | _rowid |
++---+------+----+----+--------+
+| 1 |    2 |  3 |  4 |      4 |
+| 5 |    6 |  7 |  8 |      8 |
+| 9 |   10 | 11 | 12 |     12 |
++---+------+----+----+--------+
+3 rows in set (0.01 sec)
+```
 
 ### 4.2 InnoDB逻辑存储结构
 
+InnoDB所有数据都被逻辑地存放在一个空间中，称之为**表空间（tablespace）**。
 
+表空间由**段**（segment）、**区**（extent）、**页**（page，有时也叫块，block）组成。
+
+![](../images/learn-database-025.jpg)
 
 #### 表空间
 
@@ -539,59 +700,92 @@ else
 
 ####  区
 
+区是由连续页组成的空间，在任何情况下每个区的大小都为**1MB**。为了保证区中页的连续性，InnoDB存储引擎一次从磁盘申请4～5个区。在默认情况下，InnoDB存储引擎页的大小为**16KB**，即一个区中一共有64个连续的页。
 
+InnoDB 1.0.x版本开始引入**压缩页**，即每个页的大小可以通过参数**KEY_BLOCK_SIZE**设置为2K、4K、8K，因此每个区对应页的数量就应该为512、256、128。
 
 #### 页
 
+页是InnoDB磁盘管理的最小单位。
 
+常见页类型：
+
+- 数据页（B-tree Node）
+- undo页（undo Log Page）
+- 系统页（System Page）
+- 事务数据页（Transaction system Page）
+- 插入缓冲位图页（Insert Buffer Bitmap）
+- 插入缓冲空闲列表页（Insert Buffer Free List）
+- 未压缩的二进制大对象页（Uncompressed BLOB Page）
+- 压缩的二进制大对象页（compressed BLOB Page）
 
 #### 行
 
-
+InnoDB存储引擎是**面向列的（row-oriented）**，也就说数据是按行进行存放的。每个页存放的行记录也是有硬性定义的，最多允许存放16KB / 2-200行的记录，即7992行记录。
 
 ### 4.3 InnoDB行记录格式
 
-
+InnoDB存储引擎和大多数数据库一样（如Oracle和Microsoft SQLServer数据库），记录是以行的形式存储的。这意味着页中保存着表中一行行的数据。
 
 #### Compact行记录格式
 
+![](../images/learn-database-026.jpg)
 
+
+
+![](../images/learn-database-027.jpg)
+
+所以InnoDB存储引擎在页内部是通过一种链表的结构来串连各个行记录的。
+
+不管是CHAR类型还是VARCHAR类型，在compact格式下NULL值都不占用任何存储空间。
 
 #### Redundant行记录格式
 
+![](../images/learn-database-028.jpg)
 
+
+
+![](../images/learn-database-029.jpg)
 
 #### 行溢出数据
 
-
+InnoDB存储引擎可以将一条记录中的某些数据存储在真正的数据页面之外。
 
 #### Compressed和Dynamic行记录格式
 
-
+InnoDB 1.0.x版本开始引入了新的文件格式（file format，用户可以理解为新的页格式），以前支持的Compact和Redundant格式称为**Antelope文件格式**，新的文件格式称为**Barracuda文件格式**。Barracuda文件格式下拥有两种新的行记录格式：Compressed和Dynamic。
 
 #### CHAR的行结构存储
 
-
+因此可以认为在多字节字符集的情况下，CHAR和VARCHAR的实际行存储基本是没有区别的。
 
 ### 4.4 InnoDB数据页结构
 
-
+![](../images/learn-database-030.jpg)
 
 #### File Header（文件头）
 
+记录页的一些头信息。
 
+![](../images/learn-database-031.jpg)
+
+![](../images/learn-database-032.jpg)
 
 #### Page Header（页头）
 
+记录数据页的状态信息，由14个部分组成，共占用56字节。
 
+![](../images/learn-database-033.jpg)
 
 #### Infimun和Supremum Records
 
+每个数据页中有两个虚拟的行记录，用来限定记录的**边界**。Infimum记录是比该页中任何主键值都要小的值，Supremum指比任何可能大的值还要大的值。这两个值在页创建时被建立，并且在任何情况下不会被删除。
 
+![](../images/learn-database-034.jpg)
 
 #### User Records（用户记录，即行记录）
 
-
+InnoDB存储引擎表总是B+树索引组织的。
 
 #### Free Space（空闲空间）
 
@@ -599,33 +793,57 @@ else
 
 #### Page Directory（页目录）
 
-
+存放了记录的相对位置（注意，这里存放的是页相对位置，而不是偏移量）。
 
 #### File Trailer（文件结尾信息）
+
+为了检测页是否已经完整地写入磁盘（如可能发生的写入过程中磁盘损坏、机器关机等）。
+
+#### InnoDB数据页结构示例分析
 
 
 
 ### 4.5 Named File Formats机制
 
-
+解决不同版本下页结构兼容性的问题。
 
 ### 4.6 约束
 
 #### 数据完整性
 
+关系型数据库系统和文件系统的一个不同点是，关系数据库本身能保证存储数据的完整性，不需要应用程序的控制，而文件系统一般需要在程序端进行控制。
 
+在InnoDB存储引擎表中，确保数据完整性的几种途径：
+
+- 选择合适的数据类型确保一个数据值满足特定条件。
+- 外键（Foreign Key）约束。
+- 编写触发器。
+- 还可以考虑用DEFAULT约束作为强制域完整性的一个方面。
+
+几种约束
+
+- Primary Key
+- Unique Key
+- Foreign Key
+- Default
+- NOT NULL
 
 #### 约束的创建和查找
+
+约束创建的两种方式：
+
+- 表建立时就进行约束定义
+- `ALTER TABLE`
 
 
 
 #### 约束和索引的区别
 
-
+约束更是一个逻辑的概念，用来保证数据的完整性，而索引是一个数据结构，既有逻辑上的概念，在数据库中还代表着物理存储的方式。
 
 #### 对错误数据的约束
 
-
+如果用户想通过约束对于数据库非法数据的插入或更新，即MySQL数据库提示报错而不是警告，那么用户必须设置参数sql_mode，用来严格审核输入的参数。
 
 ####  ENUM和SET约束
 
@@ -633,63 +851,172 @@ else
 
 ####  触发器与约束
 
+触发器的作用是在执行INSERT、DELETE和UPDATE命令之前或之后自动调用SQL命令或存储过程。
 
+具备Super权限的用户通过`CREATE TRIGGER`命令创建触发器，完整格式：
+
+```mysql
+CREATE￼
+[DEFINER = { user | CURRENT_USER }]￼
+TRIGGER trigger_name BEFORE|AFTER INSERT|UPDATE|DELETE￼
+ON tbl_name FOR EACH ROW trigger_stmt
+```
+
+最多可以为一个表建立6个触发器，即分别为INSERT、UPDATE、DELETE的BEFORE和AFTER各定义一个。
 
 #### 外键约束
+
+MyISAM存储引擎本身并不支持外键，对于外键的定义只是起到一个注释的作用；而InnoDB存储引擎则完整支持外键约束。定义格式：
+
+```mysql
+[CONSTRAINT [symbol]] FOREIGN KEY￼
+[index_name] (index_col_name, ...)￼
+REFERENCES tbl_name (index_col_name,...)￼
+[ON DELETE reference_option]￼
+[ON UPDATE reference_option]￼
+reference_option:￼
+RESTRICT | CASCADE | SET NULL | NO ACTION
+```
 
 
 
 ### 4.7 视图
 
+视图（View）是一个命名的虚表，它由一个SQL查询来定义，可以当做表使用。与持久表（permanent table）不同的是，视图中的数据没有实际的物理存储。
+
+#### 视图的作用
+
+
+
+#### 物化视图
+
 
 
 #### 4.8 分区表
+
+MySQL数据库支持的分区类型为水平分（指将同一表中不同行的记录分配到不同的物理文件中），并不支持垂直分（指将同一表中不同列的记录分配到不同的物理文件中。）。
+
+#### 分区类型
+
+##### RANGE分区
+
+##### LIST分区
+
+##### HASH分区
+
+HASH分区的目的是将数据均匀地分布到预先定义的各个分区中，保证各分区的数据数量大致都是一样的。
+
+##### KEY分区
+
+##### COLUMNS分区
+
+
+
+#### 子分区
+
+
+
+#### 分区中的NULL值
+
+
+
+#### 分区和性能
+
+
+
+#### 在表和分区间交换数据
+
+
 
 
 
 ## 5 索引与算法
 
+索引的数量需要一个合适的平衡点。
 
+从一开始就应该在需要处添加索引。
 
 ### 5.1 InnoDB存储引擎索引概述
 
+InnoDB支持的几种索引:
 
+- B+树索引
+- 全文索引
+- 哈希索引
+
+B+树索引目前关系型数据库系统中查找最为常用和最为有效的索引。
+
+B+树中的B不是代表二叉（binary），而是代表**平衡（balance）**，因为B+树是从最早的平衡二叉树演化而来，但是B+树不是一个二叉树。
+
+B+树索引并不能找到一个给定键值的具体行。B+树索引能找到的只是被查找数据行所在的页。然后数据库通过把页读入到内存，再在内存中进行查找，最后得到要查找的数据。
 
 ### 5.2 数据结构与算法
 
+#### 二分查找法（binary search）
 
-
-#### 二分查找法
-
-
+基本思想是：将记录按有序化（递增或递减）排列，在查找过程中采用跳跃式方式查找，即先以有序数列的中点位置为比较对象，如果要找的元素值小于该中点元素，则将待查序列缩小为左半部分，否则为右半部分。
 
 #### 二叉查找树和平衡二叉树
 
 
 
+平衡二叉树的定义如下：首先符合二叉查找树的定义，其次必须满足任何节点的两个子树的高度最大差为1。
+
+
+
 ### 5.3 B+树
 
+B+树是为磁盘或其他直接存取辅助设备设计的一种平衡查找树。在B+树中，所有记录节点都是按键值的大小顺序存放在同一层的叶子节点上，由各叶子节点指针进行连接。
 
+#### B+树的插入操作
+
+![](../images/learn-database-035.jpg)
+
+#### B+树的删除操作
+
+![](../images/learn-database-036.jpg)
 
 ### 5.4 B+树索引
 
-#### 聚集索引
+#### 聚集索引（clustered index）
 
+由于实际的数据页只能按照一棵B+树进行排序，因此每张表只能拥有一个聚集索引。
 
-
-#### 辅助索引
+#### 辅助索引（secondary index）
 
 
 
 #### B+树索引的分裂
 
+![](../images/learn-database-037.jpg)
 
+![](../images/learn-database-038.jpg)
 
 #### B+树索引的管理
+
+1. 索引管理
+
+
+
+2. Fast Index Creation
+
+
+
+3. Online Schema Change
+
+
+
+4. Online DDL
+
+
 
 
 
 ### 5.5 Cardinality值
+
+
+
+#### InnoDB存储引擎的Cardinality统计
 
 
 
@@ -729,7 +1056,7 @@ else
 
 #### 哈希表
 
-
+哈希表（Hash Table）也称散列表，由直接寻址表改进而来。
 
 ####  InnoDB存储引擎中的哈希算法
 
@@ -743,7 +1070,106 @@ else
 
 
 
+#### 倒排索引（inverted index）
+
+
+
+#### InnoDB全文检索
+
+
+
+#### 全文检索（Full-Text Search）
+
+```mysql
+MATCH (col1,col2,...) AGAINST (expr [search_modifier])￼
+search_modifier:￼
+	{￼
+		IN NATURAL LANGUAGE MODE￼
+		| IN NATURAL LANGUAGE MODE WITH QUERY EXPANSION￼
+    | IN BOOLEAN MODE￼
+    | WITH QUERY EXPANSION￼
+  }
+```
+
+
+
 ## 6 锁
+
+### 6.1 什么是锁
+
+锁是数据库系统区别于文件系统的一个关键特性。
+
+InnoDB存储引擎不仅会在**行级别**上对表数据上锁，也会在数据库内部其他多个地方使用锁，从而允许对多种不同资源提供并发访问。例如，操作缓冲池中的**LRU列表，删除、添加、移动LRU列表**中的元素，为了保证一致性，必须有锁的介入。
+
+数据库系统使用锁是为了支持对共享资源（不仅仅是“行记录”）进行并发访问，提供数据的完整性和一致性。
+
+**注：**不同的数据库，锁的实现方法是不同的。
+
+### 6.2 lock与latch
+
+![](../images/learn-database-039.jpg)
+
+### 6.3 InnoDB存储引擎中的锁
+
+#### 锁的类型
+
+#### 一致性非锁定读
+
+
+
+#### 一致性锁定读
+
+
+
+#### 自增长与锁
+
+
+
+#### 外键和锁
+
+
+
+### 6.4 锁的算法
+
+#### 行锁的3种算法
+
+- Record Lock：单个行记录上的锁
+- Gap Lock：间隙锁，锁定一个范围，但不包含记录本身
+- Next-Key Lock：Gap Lock+Record Lock，锁定一个范围，并且锁定记录本身
+
+
+
+#### 解决Phantom Problem
+
+
+
+### 6.5 锁问题
+
+#### 脏读
+
+
+
+#### 不可重复读
+
+
+
+#### 丢失更新
+
+
+
+### 6.6 阻塞
+
+
+
+### 6.7 死锁
+
+
+
+#### 死锁概率
+
+
+
+### 6.8 锁升级
 
 
 
@@ -751,17 +1177,69 @@ else
 
 ## 7 事务
 
+事务（Transaction）也是数据库区别于文件系统的重要特性。
 
+ACID的特性
 
 ### 7.1 认识事务
 
 
 
+#### 分类
+
+##### 扁平事务（Flat Transactions）
+
+##### 带有保存点的扁平事务（Flat Transactions withSavepoints）
+
+##### 链事务（Chained Transactions）
+
+##### 嵌套事务（Nested Transactions）
+
+##### 分布式事务（Distributed Transactions）
+
 ### 7.2 事务的实现
+
+隔离性：锁
+
+原子性、持久性：redo log（重做日志）
+
+一致性：undo log
+
+#### redo
+
+
+
+#### undo
+
+
+
+#### purge
+
+![](../images/learn-database-040.jpg)
+
+
+
+#### group commit
 
 
 
 ### 7.3 事务控制语句
+
+```mysql
+START TRANSACTION | BEGIN
+
+COMMIT
+
+ROLLBACK
+
+SAVEPOINT identifier
+
+RELEASE SAVEPOINT identifier
+
+ROLLBACK TO[SAVEPOINT]identifier
+
+SET TRANSACTION
+```
 
 
 
@@ -770,6 +1248,10 @@ else
 
 
 ### 7.5 对于事务操作的统计
+
+每秒请求数（Question Per Second，QPS）
+
+每秒事务处理的能力（Transaction Per Second，TPS）
 
 
 
@@ -828,15 +1310,29 @@ else
 
 ### 8.2 冷备
 
-
+对于InnoDB存储引擎的冷备非常简单，只需要备份MySQL数据库的frm文件，共享表空间文件，独立表空间文件（*.ibd），重做日志文件。另外建议定期备份MySQL数据库的配置文件my.cnf，这样有利于恢复的操作。
 
 
 
 ### 8.3 逻辑备份
 
-
-
 #### mysqldump
+
+
+
+#### SELECT...INTO OUTFILE
+
+
+
+#### 逻辑备份的恢复
+
+
+
+#### LOAD DATA INFILE
+
+
+
+#### mysqlimport
 
 
 
@@ -846,13 +1342,37 @@ else
 
 ### 8.5 热备
 
+#### ibbackup
+
+
+
+#### XtraBackup
+
+
+
+####  XtraBackup实现增量备份
+
 
 
 ### 8.6 快照备份
 
+MySQL数据库本身并不支持快照功能，因此快照备份是指通过文件系统支持的快照功能对数据库进行备份。备份的前提是将所有数据库文件放在同一文件分区中，然后对该分区进行快照操作。
 
 
-### 8.7 复制
+
+### 8.7 复制（replication）
+
+#### 复制的工作原理
+
+![](../images/learn-database-041.jpg)
+
+![](../images/learn-database-042.jpg)
+
+####  快照+复制的备份架构
+
+![](../images/learn-database-043.jpg)
+
+
 
 
 
@@ -862,7 +1382,11 @@ else
 
 ### 9.1 选择合适的CPU
 
+数据库的应用类型：OLTP（Online Transaction Processing，在线事务处理）和OLAP（Online Analytical Processing，在线分析处理）。
 
+OLAP多用在数据仓库或数据集市中，一般需要执行复杂的SQL语句来进行查询；OLTP多用在日常的事物处理应用中，如银行交易、在线商品交易、Blog、网络游戏等应用。相对于OLAP，数据库的容量较小。
+
+InnoDB存储引擎一般都应用于OLTP的数据库应用
 
 ### 9.2 内存的重要性
 
@@ -878,13 +1402,19 @@ else
 
 ### 9.5 操作系统的选择
 
-
+稳定性
 
 ### 9.6 不同的文件系统对数据库性能的影响
 
 
 
 ### 9.7 选择合适的基准测试工具
+
+#### sysbench
+
+
+
+#### mysql-tpcc
 
 
 
