@@ -4,6 +4,10 @@
 
 🏷️微信读书
 
+http://redisbook.com/
+
+[Redis 3.0源码注释](https://github.com/huangz1990/redis-3.0-annotated)
+
 
 
 ### 前言

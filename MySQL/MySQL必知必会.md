@@ -136,6 +136,13 @@ help
 help show;
 ```
 
+```mysql
+-- 查看服务器的主机名
+system hostname
+```
+
+
+
 ### 4 检索数据
 
 ```mysql
@@ -957,7 +964,7 @@ FROM custnew;
 
 
 
-### 20.更新和删除数据
+### 20 更新和删除数据
 
 #### 更新数据
 
@@ -1018,7 +1025,7 @@ Truncate tablename;
 
 
 
-### 21.创建和操纵表
+### 21 创建和操纵表
 
 #### 创建表
 
@@ -1709,6 +1716,167 @@ mysql> Show Grants For andy;
 
 https://dev.mysql.com/doc/mysql/en/error-handling.html
 
+
+
+## 补充
+
+### MySQL数据类型
+
+大致可以分为三类：数值、日期/时间和字符串(字符)类型。
+
+#### 数值类型
+
+##### 整型
+
+TINYINT
+
+SMALLINT
+
+MEDIUMINT
+
+INT
+
+BIGINT
+
+##### 浮点型
+
+FLOAT
+
+DOUBLE
+
+DECIMAL
+
+#### 日期和时间类型
+
+DATETIME、DATE、TIMESTAMP、TIME和YEAR
+
+#### 字符串类型
+
+字符串类型指CHAR、VARCHAR、BINARY、VARBINARY、BLOB、TEXT、ENUM和SET。
+
+char(n) 和 varchar(n) 中括号中 n 代表字符的个数，并不代表字节个数，比如 CHAR(30) 就可以存储 30 个字符。
+
+BINARY 和 VARBINARY 类似于 CHAR 和 VARCHAR，不同的是它们包含二进制字符串而不要非二进制字符串。
+
+BLOB 是一个二进制大对象，根据大小分为4种：TINYBLOB、BLOB、MEDIUMBLOB 和 LONGBLOB。
+
+TEXT 类型根据大小分为4 种，与BLOB类型对应：TINYTEXT、TEXT、MEDIUMTEXT 和 LONGTEXT。
+
+| 类型       | 大小                  | 用途                            |
+| :--------- | :-------------------- | :------------------------------ |
+| CHAR       | 0-255 bytes           | 定长字符串                      |
+| VARCHAR    | 0-65535 bytes         | 变长字符串                      |
+| TINYBLOB   | 0-255 bytes           | 不超过 255 个字符的二进制字符串 |
+| TINYTEXT   | 0-255 bytes           | 短文本字符串                    |
+| BLOB       | 0-65 535 bytes        | 二进制形式的长文本数据          |
+| TEXT       | 0-65 535 bytes        | 长文本数据                      |
+| MEDIUMBLOB | 0-16 777 215 bytes    | 二进制形式的中等长度文本数据    |
+| MEDIUMTEXT | 0-16 777 215 bytes    | 中等长度文本数据                |
+| LONGBLOB   | 0-4 294 967 295 bytes | 二进制形式的极大文本数据        |
+| LONGTEXT   | 0-4 294 967 295 bytes | 极大文本数据                    |
+
+
+
+### MySQL索引
+
+#### **从数据结构角度**
+
+1、B+树索引
+
+2、hash索引
+
+3、FULLTEXT索引（现在MyISAM和InnoDB引擎都支持了）
+
+4、R-Tree索引（用于对GIS数据类型创建SPATIAL索引）
+
+#### 从物理存储角度
+
+1、聚集索引（clustered index）
+
+2、非聚集索引（non-clustered index）
+
+#### 从逻辑角度
+
+##### 1.普通索引
+
+不同的创建方式
+
+```mysql
+-- 直接创建
+CREATE INDEX index_name ON table(column(length))
+
+-- 修改表结构的方式添加
+ALTER TABLE table_name ADD INDEX index_name ON (column(length))
+
+-- 创建表的时候同时创建
+CREATE TABLE `table` (
+    `id` int(11) NOT NULL AUTO_INCREMENT ,
+    `title` char(255) CHARACTER NOT NULL ,
+    `content` text CHARACTER NULL ,
+    `time` int(10) NULL DEFAULT NULL ,
+    PRIMARY KEY (`id`),
+    INDEX index_name (title(length))
+)
+
+-- 删除索引
+DROP INDEX index_name ON table
+```
+
+##### 2.唯一索引
+
+与普通索引类似不同的是：必须唯一，但允许有空值。
+
+```mysql
+CREATE UNIQUE INDEX indexName ON table(column(length))
+
+ALTER TABLE table_name ADD UNIQUE indexName ON (column(length))
+
+CREATE TABLE `table` (
+    `id` int(11) NOT NULL AUTO_INCREMENT ,
+    `title` char(255) CHARACTER NOT NULL ,
+    `content` text CHARACTER NULL ,
+    `time` int(10) NULL DEFAULT NULL ,
+    UNIQUE indexName (title(length))
+);
+```
+
+##### 3.主键索引
+
+一种特殊的唯一索引，不允许有空值，一个表只能有一个主键索引。
+
+```mysql
+CREATE TABLE `table` (
+    `id` int(11) NOT NULL AUTO_INCREMENT ,
+    `title` char(255) NOT NULL ,
+    PRIMARY KEY (`id`)
+);
+```
+
+##### 4.组合索引
+
+多个字段上创建的索引。
+
+```mysql
+ALTER TABLE `table` ADD INDEX name_city_age (name,city,age); 
+
+```
+
+##### 5.全文索引
+
+```mysql
+CREATE FULLTEXT INDEX index_content ON article(content)
+
+ALTER TABLE article ADD FULLTEXT index_content(content)
+
+CREATE TABLE `table` (
+    `id` int(11) NOT NULL AUTO_INCREMENT ,
+    `title` char(255) CHARACTER NOT NULL ,
+    `content` text CHARACTER NULL ,
+    `time` int(10) NULL DEFAULT NULL ,
+    PRIMARY KEY (`id`),
+    FULLTEXT (content)
+);
+```
 
 
 
