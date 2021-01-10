@@ -1,4 +1,12 @@
+[官网](https://redis.io/)
 
+[redis中文文档](http://www.redis.cn/documentation.html)
+
+《Redis开发与运维》
+
+《Redis设计与实现》
+
+《Redis入门指南》
 
 ## Redis入门学习
 
