@@ -111,7 +111,7 @@ show status;
 
 -- 分别显示创建特定表和数据库的mysql语句
 show create table tablename;
-show create database;
+show create database databasename;
 
 -- 查看test数据库中所有表[以y开头的表]信息
 show table status from test [like 'y%']\G;   
@@ -141,12 +141,10 @@ help show;
 system hostname
 ```
 
-
-
 ### 4 检索数据
 
 ```mysql
--- DISTINCT 关键字用来显示对应列不同数据。
+-- DISTINCT 关键字用来显示对应列不同数据，也就是去除相同的行数据
 select distinct vend_id,prod_price from products;
 
 -- 限定表名和列名
@@ -196,7 +194,9 @@ select prod_name, prod_price, from products where vend_id NOT IN (1002, 1003) or
 
 `%`  表示任意字符出现任意多次(**不能匹配NULL**)
 
-`select prod_id, prod_name from products where prod_name LIKE 'jet%';`
+```mysql
+select prod_id, prod_name from products where prod_name LIKE 'jet%';
+```
 
 `_` 只匹配单个字符
 
@@ -240,8 +240,6 @@ mysql> select vend_name from vendors where vend_name regexp '\\.' order by vend_
 | Furball Inc. |
 +--------------+
 ```
-
-
 
 #### 匹配字符类
 
@@ -437,7 +435,7 @@ mysql> select avg(distinct prod_price) as avg_price  from products where vend_id
 ```
 
 
-distinct 不能用于count(*),并且用于max()和min()没有多大意义。
+distinct 不能用于count(*)，并且用于max()和min()没有多大意义。
 
 #### 12.3 组合聚集函数
 
@@ -461,9 +459,9 @@ mysql> select count(*) as num_items,
 
 #### group by
 
-group by子句可以包含任意数目的列
+group by子句可以包含任意数目的列。
 
-null算分为一组
+如果分组列中具有NULL值，则NULL将作为一个分组返回。
 
 ```mysql
 mysql> select vend_id, count(*) as num_prods from products group by vend_id;
@@ -478,6 +476,7 @@ mysql> select vend_id, count(*) as num_prods from products group by vend_id;
 ```
 
 ```mysql
+-- 使用WITH ROLLUP关键字，可以得到每个分组以及每个分组汇总级别（针对每个分组）的值，表示在进行分组统计的基础上再次进行汇总统计
 mysql> select vend_id, count(*) as num_prods from products group by vend_id with rollup;
 +---------+-----------+
 | vend_id | num_prods |
@@ -492,7 +491,7 @@ mysql> select vend_id, count(*) as num_prods from products group by vend_id with
 
 
 
-#### 过滤分组
+#### 过滤分组having
 
 having类似where，where过滤行，having过滤分组
 
@@ -792,7 +791,7 @@ on customers.cust_id = orders.cust_id;
 +---------+-----------+
 ```
 
- `LEFT OUTER JOIN` 和 `RIGHT OUTER JOIN`
+外部联结分为左外联结（ `LEFT OUTER JOIN`  简写为`Left Join`）和右外联结（ `RIGHT OUTER JOIN `简写为`Right Join`）。
 
 #### 使用带聚集函数的联结
 
