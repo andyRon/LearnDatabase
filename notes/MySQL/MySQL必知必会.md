@@ -113,6 +113,8 @@ show status;
 show create table tablename;
 show create database databasename;
 
+-- 查看当前数据库所有表（包括视图）的状态
+show table status;
 -- 查看test数据库中所有表[以y开头的表]信息
 show table status from test [like 'y%']\G;   
 
@@ -365,7 +367,7 @@ mysql> select prod_id, quantity, item_price, quantity*item_price  AS expanded_pr
 left()  right() length() locate()  lower()  upper()  ltrim() rtrim()  sounder()  substring()
 ```
 
-![](../images/learn-database-020.jpg)
+![](../../images/learn-database-020.jpg)
 
 ```mysql
 mysql> select vend_name, Upper(vend_name) AS vend_name_upcase from vendors order by vend_name;
@@ -394,11 +396,11 @@ mysql> select cust_id, order_num from orders where Date(order_date) Between '200
 +---------+-----------+
  ```
 
-![](../images/learn-database-021.jpg)
+![](../../images/learn-database-021.jpg)
 
 #### 数值处理函数
 
-![](../images/learn-database-022.jpg)
+![](../../images/learn-database-022.jpg)
 
 ### 12 汇总数据
 
@@ -516,7 +518,7 @@ mysql> select vend_id, count(*) as num_prods from products where prod_price >=10
 
 #### select子句顺序
 
-![](../images/learn-database-023.jpg)
+![](../../images/learn-database-023.jpg)
 
 
 ### 14 子查询
@@ -888,7 +890,7 @@ from productnotes
 where Match(note_text) Against('rabbit');
 ```
 
-结果：![](../images/learn-database-001.jpg)
+结果：![](../../images/learn-database-001.jpg)
 
 使用Like子句：
 
@@ -898,7 +900,7 @@ from productnotes
 WHERE note_text LIKE '%rabbit%';
 ```
 
-结果：![](../images/learn-database-002.jpg)
+结果：![](../../images/learn-database-002.jpg)
 
 结果的排序不同，全文搜索的结果排序是确定，二Like子句就不一定了。
 
@@ -910,7 +912,7 @@ select note_text,
 from productnotes;
 ```
 
-结果：![](../images/learn-database-003.jpg)
+结果：![](../../images/learn-database-003.jpg)
 
 `rank`列是根据行中**词的数目、唯一词的数目、整个索引中词的总数以及包含该词的行的数目**计算出来。0就是不包含，越大表示匹配越高。
 
@@ -1128,9 +1130,29 @@ RENAME　TABLE customers2 TO customers;
 
 ### 22 视图是虚拟的表
 
-#### 视图
+#### 2.1 视图
 
 **视图是虚拟的表。与包含数据的表不一样，视图只包含使用时动态检索数据的查询。**
+
+之前用来检索订购了某个特定产品的客户的SQL：
+
+```mysql
+Select cust_name, cust_contact
+From customers, orders, orderitems
+Where customers.cust_id = order.cust_id
+	And orderitems.order_num = orders.order_num
+	And pro_id = 'TNT2';
+```
+
+如果有个类似`productcustomers`的虚拟表，那么上面的检索就可以简化为：
+
+```mysql
+Select cust_name, cust_contact 
+From productcustomers
+Where prod_id = 'TNT2';
+```
+
+
 
 #####  为什么使用视图？
 
@@ -1140,27 +1162,33 @@ RENAME　TABLE customers2 TO customers;
 - 保护数据。可以给用户授予表的特定部分的访问权限而不是整个表的访问权限。
 - 更改数据格式和表示。视图可返回与底层表的表示和格式不同的数据。
 
+> 注：在部署使用了大量视图的应用前，应该进行测试。
+
 ##### 视图的规则和限制
 
 - 唯一命名
 - 数目没有限制
 - 必须具有足够的访问权限
-- 可以嵌套
-- ORDER BY
+- 可以嵌套，即可以利用从其他视图中检索数据的查询来构造一个视图
+- 视图中的`ORDER BY`会被外面的覆盖
+- 视图中的`Where`会外面的自动组合
 - 视图不能索引，也不能有关联的触发器或默认值
 - 视图可以和表一起使用
 
-#### 使用视图
+#### 22.2 使用视图
 
 ```mysql
 -- 创建视图
-CREATE VIEW ;
+CREATE VIEW    ;
 
 -- 查看视图的语句
 SHOW CREATE VIEW viewname;
 
 -- 删除视图
 DROP VIEW viewname;
+
+-- 查看所有视图
+show table status where comment='view';
 ```
 
 ##### 利用视图简化复杂的联结
@@ -1170,17 +1198,24 @@ CREATE VIEW productcustomers AS
 SELECT cust_name, cust_contact, prod_id 
 FROM customers, orders, orderitems 
 WHERE customers.cust_id = orders.cust_id 
-AND orderitems.order_num = orders.order_num;
+	AND orderitems.order_num = orders.order_num;
 ```
 
-##### 重新格式化检索出的数据 
+##### 用视图重新格式化检索出的数据 
 
 ```mysql
 CREATE VIEW vendorlocations AS
 SELECT Concat(RTrim(vend_name), '(', RTrim(vend_country), ')') 
-AS vend_title
+	AS vend_title
 FROM vendors
 ORDER BY vend_name;
+```
+
+如果经常需要这种组合格式结果，就可使把它做成视图，之后的检索是就可简化为：
+
+```mysql
+Select *
+From vendorlocations;
 ```
 
 ##### 用视图过滤不想要的数据
@@ -1195,6 +1230,19 @@ WHERE cust_email IS NOT NULL;
 ##### 使用视图与计算字段 
 
 ```mysql
+SELECT 
+		order_num,
+		prod_id,
+		quantity,
+		item_price,
+		quantity * item_price AS expanded_price 
+FROM orderitems;
+Where order_num = 20005;
+```
+
+转化为：
+
+```mysql
 CREATE VIEW orderitemsexpanded AS 
 SELECT 
 		order_num,
@@ -1203,11 +1251,31 @@ SELECT
 		item_price,
 		quantity * item_price AS expanded_price 
 FROM orderitems;
+
+Select * 
+From orderitemsexpanded
+Where order_num = 20005;
 ```
 
 ##### 更新视图
 
-一般视图用于检索（select），不用于更新（insert，update，delete）。视图更新有很多限制。
+一般视图主要用于检索（select），不用于更新（insert，update，delete），更新一个视图将更新其基表数据（视图没有数据）。
+
+视图更新有很多限制，有下面操作不能进行视图更新：
+
+> 分组（使用GROUP BY和HAVING）；
+>
+> 联结；
+>
+> 子查询；
+>
+> 并；
+>
+> 聚集函数（Min()、Count()、Sum()等）
+>
+> DISTINCT；
+>
+> 导出（计算）列
 
 
 
@@ -1218,13 +1286,24 @@ FROM orderitems;
 
 #### 为什么要使用存储过程
 
-- 封装
+优点：
 
-- 数据的完整性
+- 封装，简化复杂的操作。
 
-- 简化对变动的管理
+- 保证数据的完整性。
 
-- 提高性能
+- 简化对变动的管理，如果表名、列名或业务逻辑（或别的内容）有变化，只需要更改存储过程的代码。
+
+  通过存储过程**限制对基础数据的访问**减少了数据讹误（无意识的或别的原因所导致的数据讹误）的机会。
+
+- 提高性能。
+
+总的来说就是简单、安全、高性能。
+
+缺点：
+
+- 编写比基本SQL语句复杂。
+- 你可能没有创建存储过程的安全访问权限。
 
 #### 使用存储过程
 
@@ -1236,9 +1315,11 @@ CALL productpricing(@pricelow,
  										@pricehigh,
  										@priceaverge);
 ```
-执行名为productpricing的存储过程，它计算并返回产品的最低、最高和平均价格。
+执行名为`productpricing`的存储过程，它计算并返回产品的最低、最高和平均价格。
 
 ##### 创建存储过程
+
+创建是不会返回数据，调用存储过程才会返回数据。
 
 ```mysql
 CREATE PROCEDURE productpricing()
@@ -1248,7 +1329,7 @@ BEGIN
 END;
 ```
 
-如果使用MySQL命令行工具时，MySQL语句和MySQL命令行工具都使用`;`作为分隔符，可以使用`DELIMITER`临时更改命令行实用程序的语句分隔符：
+如果使用MySQL命令行工具时，MySQL语句和MySQL命令行工具都使用`;`作为分隔符，可以使用`DELIMITER`（delimiter，定界符）临时更改命令行实用程序的语句分隔符：
 
 ```mysql
 DELIMITER //
@@ -1262,48 +1343,68 @@ END //
 DELIMITER ;
 ```
 
+除`\`符号外，任何字符都可以用作语句分隔符。
+
 调用存储过程： 
+
 ```mysql
-CALL productpricing();
+mysql> call productpricing();
++--------------+
+| priceaverage |
++--------------+
+|    16.133571 |
++--------------+
 ```
 
 
 ##### 删除存储过程
 
-注意没有括号 
+注意没有括号 。
 ```mysql
 DROP PROCEDURE productpricing;
 ```
 
-##### 使用参数 
+不存在存储过程，删除时会报错，可加上`IF Exists`：
 
 ```mysql
+DROP PROCEDURE IF Exists productpricing;
+```
+
+##### 使用参数 
+
+productpricing只是简单地显示SELECT语句的结果。
+
+一般，存储过程并不显示结果，而是把结果返回给指定的变量。
+
+```mysql
+DELIMITER //
+
 CREATE PROCEDURE productpricing ( 
-	OUT pl DECIMAL ( 8, 2 ), 
-	OUT ph DECIMAL ( 8, 2 ), 
-	OUT pa DECIMAL ( 8, 2 ) 
+	OUT pl DECIMAL(8, 2), 
+	OUT ph DECIMAL(8, 2), 
+	OUT pa DECIMAL(8, 2) 
 ) 
 BEGIN
-	SELECT min( prod_price ) INTO pl 
+	SELECT min(prod_price) INTO pl 
 	FROM products;
-	SELECT max( prod_price ) INTO ph 
+	SELECT max(prod_price) INTO ph 
 	FROM products;
-	SELECT avg( prod_price ) INTO pa 
+	SELECT avg(prod_price) INTO pa 
 	FROM products;
-END;
+END //
+
+DELIMITER ;
 ```
 
 3个参数：pl存储产品最低价格，ph存储产品最高价格，pa存储产品平均价格。
 
-`OUT` ：从存储过程传出给调用者，
+`OUT` ：从存储过程传出给调用者
 
 `IN` ：传递给存储过程
 
 `INOUT` : 对存储过程传入和传出
 
 一系列SELECT语句，用来检索值，然后保存到相应的变量（通过指定`INTO`关键字）。
-
-
 
 调用此存储过程：（必须制定3个变量名，**mysql变量以@开头**）
 
@@ -1314,12 +1415,7 @@ CAll productpricing(@pricelow, @pricehigh, @priceaverage);
 这样，存储过程的结果就保存到三个参数中，可以通过SELECT语句查询。
 
 ```mysql
-SELECT @pricelow, @pricehigh, @priceaverage;
-```
-
-输出：
-
-```
+mysql> SELECT @pricelow, @pricehigh, @priceaverage;
 +-----------+------------+---------------+
 | @pricelow | @pricehigh | @priceaverage |
 +-----------+------------+---------------+
@@ -1327,28 +1423,34 @@ SELECT @pricelow, @pricehigh, @priceaverage;
 +-----------+------------+---------------+
 ```
 
-
-
 另一个例子，ordertotal接受订单号并返回该订单的合计：
 
 ```mysql
+DELIMITER //
 CREATE PROCEDURE ordertotal ( 
 	IN onumber INT, 
-	OUT ototal DECIMAL ( 8, 2 ) 
+	OUT ototal DECIMAL(8, 2) 
 ) 
 BEGIN
 	SELECT sum( item_price * quantity ) 
 	FROM orderitems 
 	WHERE order_num = onumber 
 	INTO ototal;
-END
+END //
+DELIMITER ;
 ```
 
 调用 :
 
 ```mysql
-CALL ordertotal ( 20005, @total );
+CALL ordertotal(20005, @total);
 SELECT @total;
+
++--------+
+| @total |
++--------+
+| 149.87 |
++--------+
 ```
 
 
@@ -1537,15 +1639,58 @@ end;
 
 ### 25 触发器
 
-1.  触发器是mysql响应delete，insert，update语句而自动执行的一条或一组(begin和end之间)语句。
-2. 名，关联的表，响应的语句，前后 （尽表支持触发器，视图和临时表不支持） `create TRIGGER newproduct AFTER insert on products FOR EACH ROW select 'Product added'` product added 是每次插入后的提示语 
+触发器是mysql响应delete，insert，update语句而自动执行的一条或一组(begin和end之间)语句。
 
-    每张表最多只能有6个触发器
-3.  `drop trigger newproduct;`
+#### 创建触发器
 
- `create trigger neworder after insert on orders for each row select new.order_num;`
+在创建触发器时，需要4条信息：唯一的触发器名；触发器关联的表；触发器应该响应的活动（DELETE、INSERT或UPDATE）；触发器何时执行（处理之前或之后）。
 
-[Err] 1415 - Not allowed to return a result set from a trigger
+```mysql
+Create TRIGGER newproduct AFTER insert on products 
+FOR EACH ROW select 'Product added'; 
+```
+
+每张表最多只能有6个触发器。
+
+#### 删除触发器
+
+```mysql
+drop trigger newproduct;
+
+ 
+```
+
+#### 使用触发器
+
+##### INSERT触发器
+
+```mysql
+Create Trigger neworder After Insert On orders 
+For Each Row Select new.order_num;
+
+Insert Into orders(order_date, cust_id)
+Values(Now(), 10001);
+```
+
+##### DELETE触发器
+
+在DELETE触发器代码内，你可以引用一个名为`OLD`的虚拟表，访问被删除的行。
+
+```mysql
+Create Trigger deleteorder Before Delete On orders
+FOr Each Row
+Begin
+	Insert Into archive_orders(order_num, order_date, cust_id)
+	Values(OLD.order_num, OLD.order_date, OLD.cust_id);
+End;
+```
+
+##### UPDATE触发器
+
+```mysql
+Create Trigger updatevendor Before Update On Vendors
+For Each Row Set NEW.vend_state = Upper(NEW.vend_state);
+```
 
 ### 26 事务
 
@@ -1586,6 +1731,14 @@ end;
 
  管理事务处理的关键在于**将SQL语句组分解为逻辑块**，并明确规定数据何时应该回退，何时不应该回退。
 
+MySQL中标识事务的开始的语句：
+
+```mysql
+Start Transaction;
+```
+
+##### 使用ROLLBACK
+
 ```mysql 
 Select * from ordertotals; 
 START TRANSACTION; 
@@ -1597,11 +1750,21 @@ select * from ordertotals;
 
 事务处理用来管理insert,update,delete.不能回退create，drop，select。
 
+##### 使用COMMIT
+
 ```mysql
 Start Transaction;
 Delete From orderitems Where order_num = 20010;
 Delete From orders Where order_num = 20010;
 Commit;
+```
+
+##### 使用保留点
+
+```mysql
+SavePoint delete1;
+
+Rollback To delete1;
 ```
 
 
@@ -1610,11 +1773,11 @@ Commit;
 
 #### 27.1 字符集和校对顺序
 
-**字符集** 字母和符号的集合 
+**字符集**：字母和符号的集合 
 
- **编码** 某个字符集成员的内部表示 
+**编码**：某个字符集成员的内部表示 
 
-**校对** 规定字符如何比较的指令（在order by，group by ，having等数据排序起作用） 
+**校对**：规定字符如何比较的指令（在order by，group by ，having等数据排序起作用） 
 
 #### 27.2 使用字符集和校对顺序
 
@@ -1651,7 +1814,9 @@ select * from customers order by lastname, firstname collate latin1_general_cs;
 
 ### 28 安全管理
 
-#### 访问控制
+#### 28.1 访问控制
+
+仅在绝对需要时使用root用户。
 
 #### 28.2 管理用户
 
@@ -1678,7 +1843,16 @@ mysql> Show Grants For andy;
 +----------------------------------+
 | GRANT USAGE ON *.* TO `andy`@`%` |
 +----------------------------------+
-1 row in set (0.01 sec)
+```
+
+##### 设置访问权限
+
+![](../../images/learn-database-050.jpg)
+
+##### 更改口令
+
+```mysql
+Set Password
 ```
 
 
@@ -1695,21 +1869,62 @@ mysql> Show Grants For andy;
 
 #### 数据库维护 
 
-*   `ANALYZE TABLE orders;`
-*   `CHECK TABLE　orders, orderitems;`
-*   `OPTIMIZE TABLE`
+```mysql
+ANALYZE TABLE orders;
+
+CHECK TABLE　orders, orderitems;
+
+OPTIMIZE TABLE
+```
+
+
 
 #### 诊断启动问题
 
+
+
 #### 查看日志文件 
 
-*错误日志* 
+日志通常位于data目录。
 
-*查询日志* 
+- 错误日志  `hostname.err`
 
-*二进制日志* 
+- 查询日志  `hostname.log`
 
-*缓存查询日志* `show variables like 'log_%';` 查看日志开启情况
+- 二进制日志  `hostname-bin`
+
+- 缓存查询日志  `hostname-slow.log`
+
+```mysql
+-- 查看日志开启情况
+mysql> show variables like 'log_%';
++----------------------------------------+----------------------------------------+
+| Variable_name                          | Value                                  |
++----------------------------------------+----------------------------------------+
+| log_bin                                | ON                                     |
+| log_bin_basename                       | /usr/local/mysql/data/binlog           |
+| log_bin_index                          | /usr/local/mysql/data/binlog.index     |
+| log_bin_trust_function_creators        | OFF                                    |
+| log_bin_use_v1_row_events              | OFF                                    |
+| log_error                              | /usr/local/mysql/data/mysqld.local.err |
+| log_error_services                     | log_filter_internal; log_sink_internal |
+| log_error_verbosity                    | 2                                      |
+| log_output                             | FILE                                   |
+| log_queries_not_using_indexes          | OFF                                    |
+| log_slave_updates                      | ON                                     |
+| log_slow_admin_statements              | OFF                                    |
+| log_slow_slave_statements              | OFF                                    |
+| log_statements_unsafe_for_binlog       | ON                                     |
+| log_syslog                             | ON                                     |
+| log_syslog_facility                    | daemon                                 |
+| log_syslog_include_pid                 | ON                                     |
+| log_syslog_tag                         |                                        |
+| log_throttle_queries_not_using_indexes | 0                                      |
+| log_timestamps                         | UTC                                    |
++----------------------------------------+----------------------------------------+
+```
+
+
 
 ### 30 改善性能
 
@@ -1877,5 +2092,23 @@ CREATE TABLE `table` (
 );
 ```
 
+### MySQL函数
+
+https://www.runoob.com/mysql/mysql-functions.html
+
+```mysql
+-- 如果 v1 的值不为 NULL，则返回 v1，否则返回 v2。
+IFNULL(v1,v2)
+-- 获得第二高薪
+Select 
+IFNULL((
+    Select Distinct Salary  
+    From Employee
+    Order By Salary Desc
+    Limit 1,1), 
+NULL) AS SecondHighestSalary;
 
 
+```
+
+MySQL自定义函数（CREATE FUNCTION）
