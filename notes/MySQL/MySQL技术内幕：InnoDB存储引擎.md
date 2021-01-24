@@ -92,7 +92,7 @@ drwxr-x---    3 _mysql  _mysql    96B 12 23 14:59 yii2basic
 
 另一种直白的说法，数据库是由一个个文件组成（一般来说都是二进制的文件）的，要对这些文件执行诸如SELECT、INSERT、UPDATE和DELETE之类的数据库操作是不能通过简单的操作文件来更改数据库的内容，需要通过数据库实例来完成对数据库的操作。
 
-![](../images/learn-database-004.jpg)
+![](../../images/learn-database-004.jpg)
 
 MySQL组成部分：
 
@@ -161,7 +161,7 @@ Merge、CSV、Sphinx和Infobright等。
 
 ### 1.4 各存储引擎之间的比较
 
-![](../images/learn-database-005.jpg)
+![](../../images/learn-database-005.jpg)
 
 ```shell
 mysql> Show Engines \G;
@@ -204,7 +204,7 @@ MySQL 5.5 开始为**默认**
 
 ### 2.3 InnoDB体系架构
 
-![](../images/learn-database-006.jpg)
+![](../../images/learn-database-006.jpg)
 
 
 
@@ -359,7 +359,7 @@ Show Variables Like 'innodb_buffer_pool_size';
 
 缓冲池中缓存的数据页类型有：**索引页、数据页、undo页、插入缓冲（insert buffer）、自适应哈希索引（adaptive hashindex）、InnoDB存储的锁信息（lock info）、数据字典信息（datadictionary）**等。
 
-![](../images/learn-database-019.jpg)
+![](../../images/learn-database-019.jpg)
 
 缓冲池可以有多个实例，每个页根据哈希值平均分配到不同缓冲池实例中。通过参数innodb_buffer_pool_instances来配置，大于一则是多个实例：
 
@@ -634,7 +634,7 @@ MySQL数据的存储是根据表进行的，每个表都会有与之对应的文
 
 #### 表空间文件
 
-![](../images/learn-database-024.jpg)
+![](../../images/learn-database-024.jpg)
 
 #### 重做日志文件
 
@@ -688,7 +688,7 @@ InnoDB所有数据都被逻辑地存放在一个空间中，称之为**表空间
 
 表空间由**段**（segment）、**区**（extent）、**页**（page，有时也叫块，block）组成。
 
-![](../images/learn-database-025.jpg)
+![](../../images/learn-database-025.jpg)
 
 #### 表空间
 
@@ -729,11 +729,11 @@ InnoDB存储引擎和大多数数据库一样（如Oracle和Microsoft SQLServer�
 
 #### Compact行记录格式
 
-![](../images/learn-database-026.jpg)
+![](../../images/learn-database-026.jpg)
 
 
 
-![](../images/learn-database-027.jpg)
+![](../../images/learn-database-027.jpg)
 
 所以InnoDB存储引擎在页内部是通过一种链表的结构来串连各个行记录的。
 
@@ -741,11 +741,11 @@ InnoDB存储引擎和大多数数据库一样（如Oracle和Microsoft SQLServer�
 
 #### Redundant行记录格式
 
-![](../images/learn-database-028.jpg)
+![](../../images/learn-database-028.jpg)
 
 
 
-![](../images/learn-database-029.jpg)
+![](../../images/learn-database-029.jpg)
 
 #### 行溢出数据
 
@@ -761,27 +761,27 @@ InnoDB 1.0.x版本开始引入了新的文件格式（file format，用户可以
 
 ### 4.4 InnoDB数据页结构
 
-![](../images/learn-database-030.jpg)
+![](../../images/learn-database-030.jpg)
 
 #### File Header（文件头）
 
 记录页的一些头信息。
 
-![](../images/learn-database-031.jpg)
+![](../../images/learn-database-031.jpg)
 
-![](../images/learn-database-032.jpg)
+![](../../images/learn-database-032.jpg)
 
 #### Page Header（页头）
 
 记录数据页的状态信息，由14个部分组成，共占用56字节。
 
-![](../images/learn-database-033.jpg)
+![](../../images/learn-database-033.jpg)
 
 #### Infimun和Supremum Records
 
 每个数据页中有两个虚拟的行记录，用来限定记录的**边界**。Infimum记录是比该页中任何主键值都要小的值，Supremum指比任何可能大的值还要大的值。这两个值在页创建时被建立，并且在任何情况下不会被删除。
 
-![](../images/learn-database-034.jpg)
+![](../../images/learn-database-034.jpg)
 
 #### User Records（用户记录，即行记录）
 
@@ -970,11 +970,11 @@ B+树是为磁盘或其他直接存取辅助设备设计的一种平衡查找树
 
 #### B+树的插入操作
 
-![](../images/learn-database-035.jpg)
+![](../../images/learn-database-035.jpg)
 
 #### B+树的删除操作
 
-![](../images/learn-database-036.jpg)
+![](../../images/learn-database-036.jpg)
 
 ### 5.4 B+树索引
 
@@ -988,9 +988,9 @@ B+树是为磁盘或其他直接存取辅助设备设计的一种平衡查找树
 
 #### B+树索引的分裂
 
-![](../images/learn-database-037.jpg)
+![](../../images/learn-database-037.jpg)
 
-![](../images/learn-database-038.jpg)
+![](../../images/learn-database-038.jpg)
 
 #### B+树索引的管理
 
@@ -1107,7 +1107,7 @@ InnoDB存储引擎不仅会在**行级别**上对表数据上锁，也会在数�
 
 ### 6.2 lock与latch
 
-![](../images/learn-database-039.jpg)
+![](../../images/learn-database-039.jpg)
 
 ### 6.3 InnoDB存储引擎中的锁
 
@@ -1215,7 +1215,7 @@ ACID的特性
 
 #### purge
 
-![](../images/learn-database-040.jpg)
+![](../../images/learn-database-040.jpg)
 
 
 
@@ -1364,13 +1364,13 @@ MySQL数据库本身并不支持快照功能，因此快照备份是指通过文
 
 #### 复制的工作原理
 
-![](../images/learn-database-041.jpg)
+![](../../images/learn-database-041.jpg)
 
-![](../images/learn-database-042.jpg)
+![](../../images/learn-database-042.jpg)
 
 ####  快照+复制的备份架构
 
-![](../images/learn-database-043.jpg)
+![](../../images/learn-database-043.jpg)
 
 
 
