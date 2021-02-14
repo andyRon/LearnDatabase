@@ -11,7 +11,7 @@ Redis是一个开源的高性能键值对数据库。它通过提供多种键值
 
 2008年，意大利，Salvatore Sanfilippo
 
-Redis是REmote DIctionary Server（远程字典服务器）的缩写，它以字典结构存储数据，并允许其他应用通过TCP协议读写字典中的内容。
+Redis是**REmote DIctionary Server**（远程字典服务器）的缩写，它以字典结构存储数据，并允许其他应用通过TCP协议读写字典中的内容。
 
 Redis支持的键值数据类型：字符串类型，散列类型，列表类型，集合类型，有序集合类型。
 
@@ -852,7 +852,7 @@ SUnion key [key ...]
 
 
 
-### 实践
+#### 实践
 
 ##### 1.存储文章标签
 

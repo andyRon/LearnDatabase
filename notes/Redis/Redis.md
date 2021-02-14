@@ -1,3 +1,5 @@
+## 资源
+
 [官网](https://redis.io/)
 
 [redis中文文档](http://www.redis.cn/documentation.html)
@@ -7,6 +9,36 @@
 《Redis设计与实现》
 
 《Redis入门指南》
+
+### 文章
+
+https://mp.weixin.qq.com/s/e-n2CM6eHDemPnGM2fuMmQ
+
+https://mp.weixin.qq.com/s/PE_xuYIloq1WhpTelUjQmw
+
+https://mp.weixin.qq.com/s/Yy-8OaNdZI2zoQ-xA96l-Q
+
+https://mp.weixin.qq.com/s/NngXypVd6ngJgbFhhnqgMQ
+
+https://mp.weixin.qq.com/s/0MJsfmTknGKYhyq81IdyAA
+
+
+
+过期策略
+
+https://mp.weixin.qq.com/s/gkVOcadZCM1kiUrlLms_TQ
+
+性能监控
+
+https://mp.weixin.qq.com/s/gcNTGJK3og0g1Elx0Po0Dw
+
+排查问题
+
+https://mp.weixin.qq.com/s/CpkgaMSiEQVznulJG7FQvQ
+
+
+
+
 
 ## Redis入门学习
 
