@@ -75,7 +75,7 @@ struct sdshdr {￼
 
 ### 2.3 SDS API
 
-![](../images/learn-database-007.jpg)
+![](../../images/learn-database-007.jpg)
 
 
 
@@ -89,7 +89,7 @@ struct sdshdr {￼
 
 #### 3.2 链表和链表节点的API
 
-![](../images/learn-database-008.jpg)
+![](../../images/learn-database-008.jpg)
 
 
 
@@ -121,7 +121,7 @@ struct sdshdr {￼
 
 #### 4.6 字典API
 
-![](../images/learn-database-009.jpg)
+![](../../images/learn-database-009.jpg)
 
 ### 5 跳跃表（skiplist）
 
@@ -133,7 +133,7 @@ struct sdshdr {￼
 
 #### 5.2 跳跃表API
 
-![](../images/learn-database-010.jpg)
+![](../../images/learn-database-010.jpg)
 
 
 
@@ -167,7 +167,7 @@ struct sdshdr {￼
 
 #### 6.5 整数集合API
 
-![](../images/learn-database-011.jpg)
+![](../../images/learn-database-011.jpg)
 
 
 
@@ -197,7 +197,7 @@ struct sdshdr {￼
 
 #### 7.4 压缩列表API
 
-![](../images/learn-database-012.jpg)
+![](../../images/learn-database-012.jpg)
 
 
 
@@ -211,29 +211,29 @@ struct sdshdr {￼
 
 #### 8.2 字符串对象
 
-![](../images/learn-database-013.jpg)
+![](../../images/learn-database-013.jpg)
 
 
 
 #### 8.3 列表对象
 
-![](../images/learn-database-014.jpg)
+![](../../images/learn-database-014.jpg)
 
 
 
 #### 8.4 哈希对象
 
-![](../images/learn-database-015.jpg)
+![](../../images/learn-database-015.jpg)
 
 
 
 #### 8.5 集合对象
 
-![](../images/learn-database-016.jpg)
+![](../../images/learn-database-016.jpg)
 
 #### 8.6 有序集合对象
 
-![](../images/learn-database-017.jpg)
+![](../../images/learn-database-017.jpg)
 
 #### 8.7 类型检查与命令多态
 
