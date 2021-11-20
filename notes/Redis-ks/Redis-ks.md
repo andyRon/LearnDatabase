@@ -1,3 +1,5 @@
+# Redis最新超详细版教程通俗易懂
+
 
 
 https://www.bilibili.com/video/BV1S54y1R7SB
@@ -26,7 +28,7 @@ https://www.bilibili.com/video/BV1S54y1R7SB
 
 发展过程：优化数据结构和索引 --> 文件缓存（IO） --> Memcached（当时最热门的技术！）
 
-![image-20211014090355563](/Users/andyron/Library/Application Support/typora-user-images/image-20211014090355563.png)
+![](../../images/image-20211014090355563.png)
 
 > 3、分库分表 + 水平拆分 + MySQL集群
 
@@ -40,7 +42,7 @@ https://www.bilibili.com/video/BV1S54y1R7SB
 
 MySQL的集群，很好满足哪个年代的所有需求！
 
-![image-20211014091533643](/Users/andyron/Library/Application Support/typora-user-images/image-20211014091533643.png)
+![](../../images/image-20211014091533643.png)
 
 （M、S代表主从）
 
@@ -52,7 +54,7 @@ MySQL等关系型数据库就不够用了！数据量很多，变化很快~！
 
 > 目前一个基本的互联网项目！
 
-![image-20211014092444345](/Users/andyron/Library/Application Support/typora-user-images/image-20211014092444345.png)
+![](../../images/image-20211014092444345.png)
 
 > 为什么要用NoSQL？
 
@@ -126,13 +128,13 @@ NoSQL = Not Only SQL（不仅仅是SQL）
 
 ### 阿里巴巴演进分析
 
-![image-20211014101831557](/Users/andyron/Library/Application Support/typora-user-images/image-20211014101831557.png)
+![](../../images/image-20211014101831557.png)
 
-![image-20211014102244334](/Users/andyron/myfield/github/LearnDatabase/notes/Redis/images/image-20211014102244334.png)
+![](../../images/image-20211014102244334.png)
 
 技术急不得，越是慢慢学，才能越扎实
 
-![image-20211014102454206](/Users/andyron/myfield/github/LearnDatabase/notes/Redis/images/image-20211014102454206.png)
+![](../../images/image-20211014102454206.png)
 
 
 
@@ -176,11 +178,11 @@ NoSQL = Not Only SQL（不仅仅是SQL）
 - 数据源繁多，经常重构
 - 数据要改造，
 
-![image-20211014105644603](/Users/andyron/myfield/github/LearnDatabase/notes/Redis/images/image-20211014105644603.png)
+![](../../images/image-20211014105644603.png)
 
 
 
-![image-20211014105712737](/Users/andyron/myfield/github/LearnDatabase/notes/Redis/images/image-20211014105712737.png)
+![](../../images/image-20211014105712737.png)
 
 
 
@@ -210,7 +212,7 @@ KV键值对：
 - 它不是存图形，而是关系，比如：朋友圈社交网络、广告推荐！
 - **Neo4j**，InfoGrid
 
-<img src="/Users/andyron/myfield/github/LearnDatabase/notes/Redis/images/image-20211014111310569.png" alt="image-20211014111310569" style="zoom:50%;" />
+<img src="../../images/image-20211014111310569.png" alt="image-20211014111310569"  />
 
 敬畏之心可以使人进步！
 
@@ -351,7 +353,7 @@ $ ps -ef | grep redis
 redis-benchmark -h localhost -p 6379 -c 100 -n 100000
 ```
 
-![image-20211014192922080](/Users/andyron/myfield/github/LearnDatabase/notes/Redis/images/image-20211014192922080.png)
+![](../../images/image-20211014192922080.png)
 
 
 
@@ -1237,7 +1239,7 @@ public class RedisAutoConfiguration {
 
  `
 
-![image-20211017164200308](/Users/andyron/myfield/github/LearnDatabase/notes/kuangshenRedis/images/image-20211017164200308.png)
+![](../../images/image-20211017164200308.png)
 
 `RedisTemplate`：
 
@@ -1280,7 +1282,7 @@ public class RedisTemplate<K, V> extends RedisAccessor implements RedisOperation
 
 没有序列化对象会报错：
 
-![image-20211017165815344](/Users/andyron/myfield/github/LearnDatabase/notes/kuangshenRedis/images/image-20211017165815344.png)
+![](../../images/image-20211017165815344.png)
 
 让对象实现可序列化接口或者主动序列化对象就可以传输了：
 
@@ -1498,7 +1500,7 @@ appendfsync everysec  # 每秒执行一次sync，可能会丢失这1s的数据
 
 ### RDB(Redis DataBase)
 
-<img src="/Users/andyron/myfield/github/LearnDatabase/notes/kuangshenRedis/images/image-20211019201815586.png" alt="image-20211019201815586" style="zoom:50%;" />
+<img src="../../images/image-20211019201815586.png" alt="image-20211019201815586" style="zoom:50%;" />
 
 在指定的时间间隔内将内存中的数据集快照写入磁盘，也就是行话讲的**Snapshot快照**，它恢复时是将快照文件直接读到内存里。 
 
@@ -1542,7 +1544,7 @@ rdb保存的文件是 `dump.rdb` （在生成环境有时候会备份这个文�
 
 将所有命令都记录下来（类似history），恢复的时候就把这个文件全部在执行一下。
 
-<img src="/Users/andyron/myfield/github/LearnDatabase/notes/kuangshenRedis/images/image-20211019204153754.png" alt="image-20211019204153754" style="zoom:50%;" />
+<img src="../../images/image-20211019204153754.png" alt="image-20211019204153754" style="zoom:50%;" />
 
 以日志的形式来记录每个写操作，将Redis执行过的所有指令记录下来（读操作不记录），只许追加文件但不可以改写文件，redis启动之初会读取该文件重新构建数据，换言之，redis重启的话就根据日志文件的内容将写指令从前到后执行一次以完成数据的恢复工作。
 
@@ -1673,11 +1675,11 @@ Redis客户端可以订阅任意数量的频道
 
 三个角色：消息发布者、频道、消息订阅者
 
-![image-20211019205347558](/Users/andyron/myfield/github/LearnDatabase/notes/kuangshenRedis/images/image-20211019205347558.png)
+![](../../images/image-20211019205347558.png)
 
 
 
-![image-20211019214845042](/Users/andyron/myfield/github/LearnDatabase/notes/kuangshenRedis/images/image-20211019214845042.png)
+![](../../images/image-20211019214845042.png)
 
 
 
@@ -1690,6 +1692,8 @@ Redis客户端可以订阅任意数量的频道
 哨兵模式
 
 ## Redis缓存穿透和雪崩
+
+
 
 
 
