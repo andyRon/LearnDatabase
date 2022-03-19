@@ -26,13 +26,13 @@ MySQL 三种注释：
 
 数据库是通过数据库软件**DBMS**(数据库管理系统)创建和操纵的容器。这个容器可以是文件，也可以不是。使用者通过DBMS访问数据库。
 
-**表**是一种结构化的文件。表的特性定义了数据在表中如何存储（可以存储什么样的数据，数据如何分解，各部分信息如何命名）。
+**表**是一种结构化的文件。表的特性定义了<u>数据在表中如何存储</u>（可以存储什么样的数据，数据如何分解，各部分信息如何命名）。
 
 **主键（primary key）** ： 一列（或一组列），其值能够唯一区分表中的每一行。 
 
 ### 2 MySQL简介
 
-DBMS分两类：基于共享文件系统（Microsoft Access、FileMaker）；基于客户机-服务器（mysql,oracle）。  
+DBMS分两类：基于共享文件系统（如Microsoft Access、FileMaker）；基于客户机-服务器（如mysql、oracle）。  
 
 <u>服务器部分</u>是负责所有数据访问和处理的一个软件（运行在叫做**数据库服务器**的计算机上）；<u>客户机</u>是与用户打交道的软件，可以是mysql提供的工具（命令行，mysql administrator等），脚本语言（如perl），web应用开发（如ASP，php），程序设计语言（如C，C++，Java）等。
 
@@ -110,8 +110,8 @@ show engines\G;
 show status;
 
 -- 分别显示创建特定表和数据库的mysql语句
-show create table tablename;
-show create database databasename;
+show create table <tablename>;
+show create database <databasename>;
 
 -- 查看当前数据库所有表（包括视图）的状态
 show table status;
@@ -499,7 +499,7 @@ having类似where，where过滤行，having过滤分组
 
 having支持所有where操作符
 
-where在数据分组前进行过滤，having在数据分组后进行过滤
+**where在数据分组前进行过滤，having在数据分组后进行过滤**
 
 group by以后的数据顺序是不值得依赖的，如需排序，要通过order by
 
@@ -1930,51 +1930,53 @@ mysql> show variables like 'log_%';
 
 https://dev.mysql.com/doc/mysql/en/error-handling.html
 
+```mysql
+> show processlist；
++----+-----------------+-----------+------+---------+--------+------------------------+------------------+
+| Id | User            | Host      | db   | Command | Time   | State                  | Info             |
++----+-----------------+-----------+------+---------+--------+------------------------+------------------+
+|  5 | event_scheduler | localhost | NULL | Daemon  | 192185 | Waiting on empty queue | NULL             |
+|  9 | root            | localhost | NULL | Query   |      0 | init                   | show processlist |
++----+-----------------+-----------+------+---------+--------+------------------------+------------------+
+2 rows in set (0.01 sec)
+```
 
 
-## 补充
 
-### MySQL数据类型
+
+
+
+
+
+
+### 附录 MySQL数据类型
 
 大致可以分为三类：数值、日期/时间和字符串(字符)类型。
 
-#### 数值类型
+#### 1.数值类型
 
-##### 整型
+整型（TINYINT、SMALLINT、MEDIUMINT、INT、BIGINT）和浮点型（FLOAT、DOUBLE、DECIMAL）。
 
-TINYINT
+| 类型         | 大小                                     | 范围（有符号）                                               | 范围（无符号）                                               | 用途            |
+| :----------- | :--------------------------------------- | :----------------------------------------------------------- | :----------------------------------------------------------- | :-------------- |
+| TINYINT      | 1 Bytes                                  | (-128，127)                                                  | (0，255)                                                     | 小整数值        |
+| SMALLINT     | 2 Bytes                                  | (-32 768，32 767)                                            | (0，65 535)                                                  | 大整数值        |
+| MEDIUMINT    | 3 Bytes                                  | (-8 388 608，8 388 607)                                      | (0，16 777 215)                                              | 大整数值        |
+| INT或INTEGER | 4 Bytes                                  | (-2 147 483 648，2 147 483 647)                              | (0，4 294 967 295)                                           | 大整数值        |
+| BIGINT       | 8 Bytes                                  | (-9,223,372,036,854,775,808，9 223 372 036 854 775 807)      | (0，18 446 744 073 709 551 615)                              | 极大整数值      |
+| FLOAT        | 4 Bytes                                  | (-3.402 823 466 E+38，-1.175 494 351 E-38)，0，(1.175 494 351 E-38，3.402 823 466 351 E+38) | 0，(1.175 494 351 E-38，3.402 823 466 E+38)                  | 单精度 浮点数值 |
+| DOUBLE       | 8 Bytes                                  | (-1.797 693 134 862 315 7 E+308，-2.225 073 858 507 201 4 E-308)，0，(2.225 073 858 507 201 4 E-308，1.797 693 134 862 315 7 E+308) | 0，(2.225 073 858 507 201 4 E-308，1.797 693 134 862 315 7 E+308) | 双精度 浮点数值 |
+| DECIMAL      | 对DECIMAL(M,D) ，如果M>D，为M+2否则为D+2 | 依赖于M和D的值                                               | 依赖于M和D的值                                               | 小数值          |
 
-SMALLINT
+ MySQL中没有专门存储货币的数据类型，一般情况下使用DECIMAL(8, 2)。
 
-MEDIUMINT
 
-INT
 
-BIGINT
 
-##### 浮点型
 
-FLOAT
-
-DOUBLE
-
-DECIMAL
-
-#### 日期和时间类型
-
-DATETIME、DATE、TIMESTAMP、TIME和YEAR
-
-#### 字符串类型
+#### 2.字符串类型
 
 字符串类型指CHAR、VARCHAR、BINARY、VARBINARY、BLOB、TEXT、ENUM和SET。
-
-char(n) 和 varchar(n) 中括号中 n 代表字符的个数，并不代表字节个数，比如 CHAR(30) 就可以存储 30 个字符。
-
-BINARY 和 VARBINARY 类似于 CHAR 和 VARCHAR，不同的是它们包含二进制字符串而不要非二进制字符串。
-
-BLOB 是一个二进制大对象，根据大小分为4种：TINYBLOB、BLOB、MEDIUMBLOB 和 LONGBLOB。
-
-TEXT 类型根据大小分为4 种，与BLOB类型对应：TINYTEXT、TEXT、MEDIUMTEXT 和 LONGTEXT。
 
 | 类型       | 大小                  | 用途                            |
 | :--------- | :-------------------- | :------------------------------ |
@@ -1988,12 +1990,94 @@ TEXT 类型根据大小分为4 种，与BLOB类型对应：TINYTEXT、TEXT、MED
 | MEDIUMTEXT | 0-16 777 215 bytes    | 中等长度文本数据                |
 | LONGBLOB   | 0-4 294 967 295 bytes | 二进制形式的极大文本数据        |
 | LONGTEXT   | 0-4 294 967 295 bytes | 极大文本数据                    |
+| Enum       |                       |                                 |
+| Set        |                       |                                 |
 
+- char(n) 和 varchar(n) 中括号中 n 代表字符的个数，并不代表字节个数，比如 CHAR(30) 就可以存储 30 个字符。
 
+- MySQL固定长度字符串比变长快得多。
+- 不管使用何种形式的字符串数据类型，串值都必须括在引号内（通常单引号更好）。
+
+#### 3.日期和时间类型
+
+DATETIME、DATE、TIMESTAMP、TIME和YEAR
+
+| 类型      | 大小 ( bytes) | 范围                                                         | 格式                | 用途                     |
+| :-------- | :------------ | :----------------------------------------------------------- | :------------------ | :----------------------- |
+| DATE      | 3             | 1000-01-01/9999-12-31                                        | YYYY-MM-DD          | 日期值                   |
+| TIME      | 3             | '-838:59:59'/'838:59:59'                                     | HH:MM:SS            | 时间值或持续时间         |
+| YEAR      | 1             | 1901/2155                                                    | YYYY                | 年份值                   |
+| DATETIME  | 8             | 1000-01-01 00:00:00/9999-12-31 23:59:59                      | YYYY-MM-DD HH:MM:SS | 混合日期和时间值         |
+| TIMESTAMP | 4             | 1970-01-01 00:00:00/2038结束时间是第 **2147483647** 秒，北京时间 **2038-1-19 11:14:07**，格林尼治时间 2038年1月19日 凌晨 03:14:07 | YYYYMMDD HHMMSS     | 混合日期和时间值，时间戳 |
+
+每个时间类型有一个有效值范围和一个"零"值，当指定不合法的MySQL不能表示的值时使用"零"值。
+
+## 补充
 
 ### MySQL索引
 
-#### **从数据结构角度**
+实际上，索引也是一张表，该表保存了主键与索引字段，并指向实体表的记录。
+
+```mysql
+-- 显示索引信息
+SHOW INDEX FROM table_name\G
+
+mysql> show index from orderitems\G;
+*************************** 1. row ***************************
+        Table: orderitems
+   Non_unique: 0
+     Key_name: PRIMARY
+ Seq_in_index: 1
+  Column_name: order_num
+    Collation: A
+  Cardinality: 5
+     Sub_part: NULL
+       Packed: NULL
+         Null:
+   Index_type: BTREE
+      Comment:
+Index_comment:
+      Visible: YES
+   Expression: NULL
+*************************** 2. row ***************************
+        Table: orderitems
+   Non_unique: 0
+     Key_name: PRIMARY
+ Seq_in_index: 2
+  Column_name: order_item
+    Collation: A
+  Cardinality: 11
+     Sub_part: NULL
+       Packed: NULL
+         Null:
+   Index_type: BTREE
+      Comment:
+Index_comment:
+      Visible: YES
+   Expression: NULL
+*************************** 3. row ***************************
+        Table: orderitems
+   Non_unique: 1
+     Key_name: fk_orderitems_products
+ Seq_in_index: 1
+  Column_name: prod_id
+    Collation: A
+  Cardinality: 9
+     Sub_part: NULL
+       Packed: NULL
+         Null:
+   Index_type: BTREE
+      Comment:
+Index_comment:
+      Visible: YES
+   Expression: NULL
+```
+
+
+
+
+
+#### 从数据结构角度分类
 
 1、B+树索引
 
@@ -2003,13 +2087,13 @@ TEXT 类型根据大小分为4 种，与BLOB类型对应：TINYTEXT、TEXT、MED
 
 4、R-Tree索引（用于对GIS数据类型创建SPATIAL索引）
 
-#### 从物理存储角度
+#### 从物理存储角度分类
 
 1、聚集索引（clustered index）
 
 2、非聚集索引（non-clustered index）
 
-#### 从逻辑角度
+#### 从逻辑角度分类
 
 ##### 1.普通索引
 
@@ -2091,6 +2175,10 @@ CREATE TABLE `table` (
     FULLTEXT (content)
 );
 ```
+
+
+
+
 
 ### MySQL函数
 
