@@ -1433,11 +1433,9 @@ mysql> show tables from mysql like 'innodb%stats';
 
 #### 子查询在MySQL中是怎么执行的
 
-##### 
+
 
 ##### 2.标量子查询、行子查询的执行方式
-
-
 
 ##### 3.In子查询优化
 
@@ -1452,6 +1450,672 @@ mysql> show tables from mysql like 'innodb%stats';
 
 
 ##### 6.对于派生表的优化
+
+
+
+## 15 查询优化的百科全书——Explain详解
+
+MySQL查询优化器在基于成本和规则对一条查询语句进行优化后，会生成一个**执行计划**，它展示了接下来执行查询的具体方式，比如<u>多表连接的顺序是什么，采用什么访问方法来具体查询每个表等</u>。
+
+```mysql
+mysql> Explain select 1;
++----+-------------+-------+------------+------+---------------+------+---------+------+------+----------+----------------+
+| id | select_type | table | partitions | type | possible_keys | key  | key_len | ref  | rows | filtered | Extra          |
++----+-------------+-------+------------+------+---------------+------+---------+------+------+----------+----------------+
+|  1 | SIMPLE      | NULL  | NULL       | NULL | NULL          | NULL | NULL    | NULL | NULL |     NULL | No tables used |
++----+-------------+-------+------------+------+---------------+------+---------+------+------+----------+----------------+
+1 row in set, 1 warning (0.00 sec)
+```
+
+EXPLAIN 语句输中的各个列的作用
+
+|     列名      |                             描述                             |
+| :-----------: | :----------------------------------------------------------: |
+|      id       |   在一个大的查询语句中，每个select关键字都对应一个唯一的id   |
+|  select_type  |                  select关键字对应的查询类型                  |
+|     table     |                             表名                             |
+|  partitions   |                        匹配的分区信息                        |
+|     type      |                      针对单表的访问方法                      |
+| possible_keys |                        可能用到的索引                        |
+|      key      |                        实际使用的索引                        |
+|    key_len    |                      实际使用的索引长度                      |
+|      ref      |    当使用索引列等值查询时，与索引列进行等值匹配的对象信息    |
+|     rows      |                   预估的需要读取的记录条数                   |
+|   filtered    | 针对预估的需要读取的记录，经过搜索条件过滤后剩余记录条数的百分比 |
+|     Extra     |                         一些额外信息                         |
+
+##### 
+
+```mysql
+Create Table single_table (
+  id INT NOT NULL AUTO INCREMENT,
+  key1 VARCHAR (100),
+  key2 INT,
+  key3 VARCHAR (100),
+  key_part1 VARCHAR(100),
+  key_part2 VARCHAR(100),
+  key_part3 VARCHAR(100),
+  common_field VARCHAR(100),
+  PRIMARY KEY (id),
+  KEY idx_keyl (keyl),
+  UNIQUE KEY uk_key2 (key2),
+  KEY idx key3 (key3),
+  KEY idx_key_part (key_partl, key_part2, key_part3)
+) Engine=InnoDB CHARSET=utf8;
+```
+
+
+
+### 15.1 执行计划输出中各列详解
+
+#### table
+
+无论查询语句有多复杂，包含多少表，最后都是对每个表今夕单表访问。**Explain语句输出的每条记录都对应这某个单表的访问方法**。
+
+#### id
+
+
+
+#### select_type
+
+![](images/image-20220414091217299.png)
+
+
+
+#### type
+
+访问方法类型，有system、const、eq_ref、ref、fulltext、ref_or_null、index_merge、unique_subquery、index_subquery、rang、index、ALL等。
+
+
+
+#### possible_keys和key
+
+
+
+#### key_len
+
+
+
+#### ref
+
+
+
+#### rows
+
+
+
+#### filtered
+
+
+
+#### Extra
+
+
+
+### 15.2 JSON格式的执行计划
+
+```mysql
+mysql> explain format=json select * from vendors\G;
+*************************** 1. row ***************************
+EXPLAIN: {
+  "query_block": {
+    "select_id": 1,
+    "cost_info": {
+      "query_cost": "1.60"
+    },
+    "table": {
+      "table_name": "vendors",
+      "access_type": "ALL",
+      "rows_examined_per_scan": 6,
+      "rows_produced_per_join": 6,
+      "filtered": "100.00",
+      "cost_info": {
+        "read_cost": "1.00",
+        "eval_cost": "0.60",
+        "prefix_cost": "1.60",
+        "data_read_per_join": "5K"
+      },
+      "used_columns": [
+        "vend_id",
+        "vend_name",
+        "vend_address",
+        "vend_city",
+        "vend_state",
+        "vend_zip",
+        "vend_country"
+      ]
+    }
+  }
+}
+1 row in set, 1 warning (0.00 sec)
+
+ERROR:
+No query specified
+```
+
+
+
+### 15.3  Extented Explain
+
+
+
+## 16 神兵利器——optimizer trace的神奇功效
+
+### 16.1 简介
+
+MySQL5.6后新增optimizer trace功能，让用户方便地**查看优化器生成执行计划的整个过程**。
+
+```mysql
+show variables like 'optimizer_trace';
++-----------------+--------------------------+
+| Variable_name   | Value                    |
++-----------------+--------------------------+
+| optimizer_trace | enabled=off,one_line=off |
++-----------------+--------------------------+
+```
+
+
+
+```mysql
+Set optimizer_trace="enabled=on";
+```
+
+
+
+### 16.2 通过optimizer_trace分析查询优化器的具体工作过程
+
+
+
+prepare阶段
+
+optimize阶段
+
+execute阶段
+
+
+
+## 17 调节磁盘和CPU的矛盾——InnoDB的Buffer Pool
+
+Buffer Pool是InnoDB想操作系统申请的一段连续的内存空间。
+
+### 17.2 Buffer Pool
+
+**innodb_buffer_pool_size**， 默认128MB，最小5MB
+
+#### 内部组成
+
+缓冲页
+
+控制块
+
+![](images/image-20220414094849328.png)
+
+
+
+#### free链表的管理
+
+![](images/image-20220414095000221.png)
+
+
+
+#### 缓冲页的哈希处理
+
+
+
+#### flush链表的管理
+
+![](images/image-20220414095211062.png)
+
+
+
+#### LRU链表的管理
+
+
+
+##### 1.缓冲区不够的窘境
+
+
+
+##### 2.简单的LRU链表
+
+
+
+##### 3.划分区域的LRU链表
+
+
+
+##### 4.更进一步优化LRU链表
+
+
+
+#### 刷新脏页到磁盘
+
+
+
+#### 多个Buffer Pool实例
+
+![](images/image-20220414095536277.png)
+
+#### innodb_buffer_pool_chunk_size
+
+
+
+#### 配置Buffer Pool时的注意事项
+
+
+
+#### 查看Buffer Pool的状态信息
+
+```mysql
+mysql> show engine innodb status\G;
+...
+----------------------
+BUFFER POOL AND MEMORY
+----------------------
+Total large memory allocated 0
+Dictionary memory allocated 524562
+Buffer pool size   8191
+Free buffers       5208
+Database pages     2876
+Old database pages 1041
+Modified db pages  0
+Pending reads      0
+Pending writes: LRU 0, flush list 0, single page 0
+Pages made young 2494, not young 74846
+0.00 youngs/s, 0.00 non-youngs/s
+Pages read 2315, created 942, written 3692
+0.00 reads/s, 0.00 creates/s, 0.00 writes/s
+No buffer pool page gets since the last printout
+Pages read ahead 0.00/s, evicted without access 0.00/s, Random read ahead 0.00/s
+LRU len: 2876, unzip_LRU len: 0
+I/O sum[0]:cur[0], unzip sum[0]:cur[0]
+--------------
+...
+```
+
+
+
+## 18 事务简介
+
+### 18.1 事务的起源
+
+#### 原子性
+
+
+
+#### 隔离性
+
+
+
+#### 一致性
+
+
+
+#### 持久性
+
+
+
+### 18.3 MySQL事务的语法
+
+#### 开启事务
+
+
+
+#### 提交事务
+
+
+
+#### 手动中止事务
+
+
+
+#### 支持事务的存储引擎
+
+
+
+#### 自动提交
+
+
+
+#### 隐式提交
+
+
+
+#### 保存点
+
+
+
+## 19 说过的话就一定要做到——redo日志
+
+
+
+### 19.2 redo日志是啥
+
+
+
+在系统因奔溃而重启时需要按照上述内容所记录的步骤重新更新数据页，上述内容称为**重做日志（redo log）**。
+
+
+
+### 19.3 redo日志格式
+
+redo日志只是记录了一下事务对数据库进行了哪些修改。
+
+![](images/image-20220414101644203.png)
+
+#### 简单的redo日志类型
+
+
+
+#### 复杂一些的redo日志类型
+
+
+
+### 19.4 Mini-Transaction（MTR）
+
+**Mini-Transaction（MTR）**：对底层页面进行一次原子访问的过程。
+
+#### 以组的形式写入redo日志
+
+
+
+### 19.5 redo日志的写入过程
+
+#### redo log block
+
+MTR生成的redo日志存储在512字节的页，这个页叫作**redo log block**（为了区分于之前的页）。
+
+![](images/image-20220414102848915.png)
+
+#### redo日志缓冲区
+
+![](images/image-20220414102927617.png)
+
+#### redo日志写入log buffer
+
+![](images/image-20220414103020062.png)
+
+
+
+### 19.6 redo日志文件
+
+#### redo日志刷盘时机
+
+
+
+#### redo日志文件组
+
+
+
+#### redo日志文件格式
+
+
+
+### 19.7 log sequence number（lsn）
+
+#### flushed_to_disk_lsn
+
+
+
+#### lsn值和redo日志文件组中的偏移量的对应关系
+
+
+
+#### flush链表中的lsn
+
+
+
+### 19.8 checkpoint
+
+
+
+### 19.9 用户线程批量从flush链表中刷出脏页
+
+
+
+### 19.10 查看系统中的各种lsn值
+
+```mysql
+Show Engine Innodb Status\G;
+...
+---
+LOG
+---
+Log sequence number          62003410
+Log buffer assigned up to    62003410
+Log buffer completed up to   62003410
+Log written up to            62003410
+Log flushed up to            62003410
+Added dirty pages up to      62003410
+Pages flushed up to          62003410
+Last checkpoint at           62003410
+5831 log i/o's done, 0.00 log i/o's/second
+----------------------
+...
+```
+
+
+
+### 19.11 innodb_flush_log_at_trx_commit的用法
+
+
+
+### 19.12 崩溃恢复
+
+
+
+## 20 后悔了怎么办——undo日志
+
+### 20.1 事务回滚的需求
+
+为了回滚而记录的东西称为**撤销日志（undo log）**。
+
+
+
+### 20.2 事务id
+
+#### 分配事务id的时机
+
+
+
+#### 事务id是怎么生成的
+
+
+
+#### trx_id隐藏列
+
+
+
+### 20.3 undo日志的格式
+
+#### Insert操作对应的undo日志
+
+![](images/image-20220414104645892.png)
+
+#### Delete操作对应的undo日志
+
+
+
+#### Update操作对应的undo日志
+
+
+
+#### 增删改操作对二级索引的影响
+
+
+
+### 20.4 通用链表结构
+
+![](images/image-20220414104906978.png)
+
+
+
+### 20.5 FIL_PAGE_UNDO_LOG页面
+
+![](images/image-20220414105012613.png)
+
+
+
+### 20.6 Undo页面链表
+
+#### 单个事务中的Undo页面链表
+
+
+
+#### 多个事务中的Undo页面链表
+
+
+
+### 20.7 undo日志具体写入过程
+
+
+
+### 20.8 重用Undo页面
+
+
+
+### 20.9 回滚段
+
+
+
+### 20.10 回滚段相关配置
+
+
+
+### 20.11 undo日志在崩溃恢复时的作用
+
+
+
+## 21 一条记录的多幅面孔——事务隔离级别和MVCC
+
+```mysql
+Create Table hero (
+	number Int,
+  name Varchar(100),
+  country Varchar(100),
+  Primary Key (number)
+) Engine=Innodb Charset=utf8;
+```
+
+
+
+### 21.2 事务隔离级别
+
+
+
+#### 事务并发执行时遇到的一致性问题
+
+
+
+#### SQL标准中的4中隔离级别
+
+按照可能导致一致性问题的严重性排序：
+
+```
+脏写>脏读>不可重复读>幻读
+```
+
+![](images/image-20220414111227031.png)
+
+#### MySQL中支持的4中隔离级别
+
+
+
+### 21.3 MVCC原理
+
+#### 版本链
+
+**多版本并发控制（Multi-Version Concurrency COntrol，MVCC）**
+
+
+
+#### ReadView
+
+
+
+### 21.4 关于purge
+
+
+
+## 22 工作面试老大难——锁
+
+### 22.1 解决并发事务带来问题的两种基本方式
+
+#### 写-写情况
+
+
+
+#### 读-写或写-读情况
+
+
+
+#### 一致性读
+
+
+
+#### 锁定读
+
+##### 1.共享锁和独占锁
+
+
+
+##### 2.锁定读的语句
+
+
+
+#### 写操作
+
+
+
+### 22.2 多粒度锁
+
+
+
+### 22.3 MySQL中的行锁和表锁
+
+#### 其它存储引擎中的锁
+
+
+
+#### InnoDB中的锁
+
+
+
+#### InnoDB锁的内存结构
+
+![](images/image-20220414113251107.png)
+
+### 22.4 语句加锁分析
+
+
+
+#### 普通的Select语句
+
+
+
+#### 锁定读的语句
+
+
+
+#### 半一致性读的语句
+
+半一致性读的语句（Semi-COnsistent Read）是一种夹在一致性读和锁定读之间的读取方式
+
+
+
+#### Insert语句
+
+
+
+### 22.5 查看事务加锁情况
+
+#### 使用information_schema数据库中的表索取锁信息
+
+
+
+### 22.6 死锁
+
+
 
 
 
