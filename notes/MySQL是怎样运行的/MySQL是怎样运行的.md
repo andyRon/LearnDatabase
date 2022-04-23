@@ -1438,25 +1438,56 @@ CREATE TABLE  `test_myisam`(
 
 **表空间**是一个抽象的概念，可以把它想象成被切分为许多个页的池子，当想为某个表插入一条记录的时候，就从池子中捞出一个对应的页把数据写进去。
 
+### 9.1 回顾旧知识
 
+#### 页的类型
+
+页的类型可查看[表5-5](#5.6 File Header（文件头部）)。由于类型名称都有前缀**FIL_PAGE_**或**FIL_PAGE_TYPE**，之后可省略前缀。
+
+#### 页通用部分
+
+[数据页有7部分](#5.2 数据页结构快览)组成，其中两个部分是其它类型页通用的。
+
+![](images/image-20220423100037831.png)
+
+![](images/image-20220412105423712.png)
+
+- 表空间的每一个页都有对应的页号，就是**FIL_PAGE_OFFSET**，4个字节，32位，也就是表示一个表空间最多可也拥有 2^32^个页。如果按照默认页大小16KB计算，那么一个表空间最多支持64TB的数据。
 
 ### 9.2 独立表空间结构
 
 #### 区的概念
 
-为了管理表空间中页，有了**区（extent）**。一个区是连续的64个页，也就是16K*64=1M。系统表空间和独立表空间都可以看成若干连续的区组成，每256区被划分成一**组**，每个组最开始的几个页面的类型是固定。
+为了管理表空间中页，有了**区（extent）**。一个区是**连续**的64个页，也就是16K*64=1M。系统表空间和独立表空间都可以看成若干连续的区组成，每256区被划分成一**组**。
 
 ![](images/image-20220413105114534.png)
 
+每个组最开始的几个页面的类型是固定。
+
 ![](images/image-20220413105334980.png)
 
-#### 段的概念
+第一组最开始的3个页面的类型是固定的，也就是extent 0这个区最开始的3个页面：
 
+- **FSP_HDR**：表空间的一些整体属性，和本组所有区（就是extent 0 ~extent 255）的属性。整个表空间只有一个。
+- **IBUF_BITMAP**：存储关于Change Buffer的信息。
+- **INODE**：存储数据结构 INODE Entry。
 
+其余各组最开始的2个页面的类型是固定的：
 
-#### 区的分类
+- **XDES**（extent descriptor）
+- **IBUF_BITMAP**
+
+#### 段（segment）的概念
+
+为了对B+树的叶节点和非叶子节点进行区别对待。存放叶子节点的区的集合就算一个段，同样存放非叶子节点的区的集合就算另一个段。逻辑上的概念。
+
+**碎片（fragment）区**
+
+#### 区的分类🔖
 
 ![](images/image-20220413105552450.png)
+
+![](images/image-20220423105507876.png)
 
 
 
@@ -1464,7 +1495,7 @@ CREATE TABLE  `test_myisam`(
 
 段是一个逻辑上的概念，是某些零散的页面以及一些完整的区的集合。
 
-
+![](images/image-20220423105742544.png)
 
 #### 各类型页面详细情况
 
@@ -1472,11 +1503,23 @@ CREATE TABLE  `test_myisam`(
 
 ![](images/image-20220413105757261.png)
 
+###### a. File Space Header
+
+![](images/image-20220423110046789.png)
+
+![](images/image-20220423110120852.png)
+
+![](images/image-20220423110211339.png)
+
+###### b. XDES Entry部分
+
 
 
 ##### 2.XDES类型
 
+![image-20220423110330506](images/image-20220423110330506.png)
 
+XDES类型的页面除了没有File Space Header部分之外，其余部分都和FSP_HDR相同。
 
 ##### 3.IBUF_BITMAP类型
 
@@ -1486,7 +1529,7 @@ CREATE TABLE  `test_myisam`(
 
 ![](images/image-20220413110032700.png)
 
-
+![](images/image-20220423110505325.png)
 
 #### Segment Header 结构的运用
 
@@ -1494,9 +1537,11 @@ CREATE TABLE  `test_myisam`(
 
 #### 真实表空间对应的文件大小
 
-
+.idb文件是自扩展的。
 
 ### 9.3 系统表空间
+
+结构与独立表空间类型。只不过整个MySQL进程只有一个系统表空间，系统表空间中需要记录一些与整个系统相关的信息。
 
 #### 整体结构
 
@@ -1504,33 +1549,107 @@ CREATE TABLE  `test_myisam`(
 
 ![](images/image-20220413110407541.png)
 
+![](images/image-20220423110911905.png)
+
+Doublewrite Buffer（双写缓冲区）
+
+#### InnoDB数据字典
+
+内部系统表（internal system table）
+
+![](images/image-20220423112002655.png)
+
+这些系统表也被称为**数据字典**。
+
+前四个表非常重要，称为**基本系统表**。
+
+##### 1.SYS_TABLES
+
+
+
+##### 2.SYS_COLUMNS
+
+
+
+##### 3.SYS_INDEXES
+
+
+
+##### 4.SYS_FIELEDS
+
 
 
 ## 10 条条大路通罗马——单表访问方法
 
-优化器
+MySQL Server对一条查询语句进行语法解析之后，就会将其交给==优化器==，优化的结果就是生成**==执行计划==**。
 
-执行计划
+这个执行计划表明了<u>应该使用哪些索引进行查询、表之间的连接顺序是啥样</u>等等。
+
+```mysql
+Create Table single_table (
+	id Int Not Null Auto_Increment,
+  key1 Varchar(100),
+  key2 Int,
+  key3 Varchar(100),
+  key_part1 Varchar(100),
+  key_part2 Varchar(100),
+  key_part3 Varchar(100),
+  common_field Varchar(100),
+  Primary Key (id),
+  Key idx_key1(key1),
+  Unique Key uk_key2 (key2),
+  Key idx_key3 (key3),
+  Key idx_key_part (key_part1, key_part2, key_part3)
+) Engine=InnoDB Charset=utf8;
+```
 
 ### 10.1 访问方法的概念
 
+平时写的查询语句本质上只是一种**声明式的语法**，MySQL执行查询语句的方式称为**访问方法（Access method）**或者访问类型。
 
+同一个查询语句可以使用多种不同的访问方法来执行。
 
 ### 10.2 const
 
+```mysql
+Select * From single_table Where id = 1438;
 
+Select * From single_table Where key2 = 3841;
+```
+
+![](images/image-20220423115519061.png)
+
+通过主键或唯一二级索引列与常数的**等值比较**来定位一条记录非常快，MySQL设计者把这种访问方法定义为const（常数级别）。
 
 ### 10.3 ref
 
+```mysql
+Select * From single_table Where key1 = 'abc';
+```
 
+![](images/image-20220423115847394.png)
+
+普通的二级索引列与常数进行等值比较，形成的扫描区间为单点扫描区间，ref。
 
 ### 10.4 ref_or_null
 
+```mysql
+Select * From single_table Where key1 = 'abc' Or key1 Is NULL;
+```
 
+![](images/image-20220423120121821.png)
+
+ref_or_null访问法只是比ref多扫描一些值为NULL的二级索引记录。
 
 ### 10.5 range
 
+```mysql
+Select * From single_table Where key2 In (1438, 6328) Or (key2 >= 38 And key2 <= 79);
+```
 
+对应的扫描区间是[1438, 1438]、[6328, 6328]、[38, 79]。
+
+“使用索引执行查询时，对应的扫描区间为若干个单点扫描区间或者范围扫描区间” range
 
 ### 10.6 index
 
@@ -1538,9 +1657,13 @@ CREATE TABLE  `test_myisam`(
 
 ### 10.7 all
 
+全表扫描
+
+### 10.8 注意事项🔖
+
+#### 重温二级索引+回表
 
 
-### 10.8 注意事项
 
 #### 索引合并
 
@@ -1556,13 +1679,23 @@ CREATE TABLE  `test_myisam`(
 
 ## 11 两个表的亲密接触——连接的原理
 
-
+关系型数据库一个至关重要的概念就是Join。
 
 
 
 ### 11.1 连接简介
 
 #### 连接的本质
+
+```mysql
+Create Table t1 (m1 int, n1 char(1));
+Create Table t2 (m2 int, n2 char(1));
+
+Insert Into t1 Values(1, 'a'), (2, 'b'), (3, 'c');
+Insert Into t2 Values (2, 'b'), (3, 'c'), (4, 'd')
+```
+
+
 
 连接就是把各个表中的记录都取出来进行一次匹配，并把匹配后的组合发给客户端。
 
