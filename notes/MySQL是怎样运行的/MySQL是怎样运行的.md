@@ -1697,21 +1697,99 @@ Insert Into t2 Values (2, 'b'), (3, 'c'), (4, 'd')
 
 
 
-连接就是把各个表中的记录都取出来进行一次匹配，并把匹配后的组合发给客户端。
+**连接**就是把各个表中的记录都取出来进行一次匹配，并把匹配后的组合发给客户端。
 
 ![](images/image-20220413112306628.png)
 
+**连接查询**
+
+**笛卡尔积**
+
+MySQL连接查询的语法很随意
+
 #### 连接过程简介
+
+连接查询中的**过滤条件**分两种：
+
+- 涉及单表的条件
+- 涉及两表的条件。比如`t1.m1=t2.m2`、`t1.n1>t2.n2`等
+
+```mysql
+Select * From t1, t2 Where t1.m1 > 1 And t1.m1 = t2.m2 And t2.n2 < 'd';
+```
+
+3个过滤条件：
+
+- t1.m1 > 1
+- t1.m1 = t2.m2 
+- t2.n2 < 'd'
+
+这个连接查询的执行过程：
+
+1. 首先确定第一个需要查询的表，称为==**驱动表**==。然后再对驱动表进行单表查询，选取代价最小的访问方法。假设使用t1位驱动表。
+2. 从驱动表每获取到一条记录，都需要到t2表中查询匹配的记录。**==被驱动表==**
+
+驱动表只需访问一次，被驱动表可能需要访问多次。
+
+![](images/image-20220424110235506.png)
+
+
 
 
 
 #### 内连接和外连接
 
-两者区别，在驱动表中的记录不符合ON子句中的连接条件时，内连接不会把该记录加入到最后的结果集中，而外连接会。
+```mysql
+Create Table student (
+	number Int Not Null Auto_Increment Comment '学号',
+  name Varchar(5) Comment '姓名',
+  major Varchar(30) Comment '专业',
+  Primary Key (number)
+) Engine=InnoDB Charset=utf8 Comment '学生信息表';
+
+Create Table score (
+	number Int Comment '学号',
+  subject Varchar(30) Comment '科目',
+  score Tinyint Comment '成绩',
+  Primary Key (number, subject)
+) Engine=InnoDB Charset=utf8 Comment '学生成绩表';
+```
+
+若驱动表中的记录在被驱动表中找不到匹配的记录，则该记录不会加入到最后的结果集中，这是就是**==内连接==**；会加入的就是**==外连接==**。
+
+MySQL中外连接细分，选取左侧表为驱动表叫**左外连接**，选取右侧表为驱动表叫**右外连接**。
+
+外连接必须使用On子句指出连接条件，On子句用户内连接与Where子句等价。
+
+##### 1.左（外）连接的语法
+
+```mysql
+Select * From t1 Left [Outer] Join t2 On 连接条件 [Where 普通过滤条件];
+```
 
 
 
-### 11.2 连接的原理
+##### 2.右（外）连接的语法
+
+```mysql
+Select * From t1 Right [Outer] Join t2 On 连接条件 [Where 普通过滤条件];
+```
+
+##### 3.内连接的语法
+
+```mysql
+Select * From t1 [Inner | Cross] Join t2 [On 连接条件] [Where 普通过滤条件];
+```
+
+简写：
+
+```mysql
+Select * From t1, t2;
+```
+
+
+
+### 11.2 连接的原理🔖
 
 #### 嵌套循环连接
 
@@ -1725,22 +1803,29 @@ Insert Into t2 Values (2, 'b'), (3, 'c'), (4, 'd')
 
 #### 基于块的嵌套循环连接
 
+Join Buffer（连接缓存区）
+
+![](images/image-20220424114012028.png)
+
 
 
 ## 12 谁最便宜就选谁——基于成本的优化
 
 ### 12.1 什么是成本
 
-- I/O成本
-- CPU成本
+- I/O成本：从磁盘到内存的加载过程损耗的时间。
+- CPU成本：读取记录以及检测记录是否满足对应的搜索条件、对结构集进行排序等操作损耗的时间。
 
+规定了一些**成本常数**：
 
+- 读取一个页面花费的成本为 1.0
+- 读取以及检测一条记录是否符合搜索条件的成本为0.2
 
 ### 12.2 单表查询的成本
 
-
-
 #### 基于成本的优化步骤
+
+成本最低的方案就是所谓的执行计划。
 
 ##### 1.根据搜索条件，找出所有可能使用的索引
 
@@ -1760,6 +1845,12 @@ Insert Into t2 Values (2, 'b'), (3, 'c'), (4, 'd')
 
 #### 基于索引统计数据的成本计算
 
+ ![](images/image-20220424115501427.png)
+
+![](images/image-20220424115515279.png)
+
+
+
 
 
 ### 12.3 连接查询的成本
@@ -1772,6 +1863,8 @@ Insert Into t2 Values (2, 'b'), (3, 'c'), (4, 'd')
 
 #### 两表连接的成本分析
 
+> 连接查询总成本 = 单次访问驱动表的成本 + 驱动表扇出值 * 单次访问被驱动表的成本
+
 
 
 #### 多表连接的成本分析
@@ -1779,6 +1872,18 @@ Insert Into t2 Values (2, 'b'), (3, 'c'), (4, 'd')
 
 
 ### 12.4 调节成本常数
+
+mysql成本常数在两个表中：
+
+```mysql
+Show Tables From mysql Like '%cost%';
++--------------------------+
+| Tables_in_mysql (%cost%) |
++--------------------------+
+| engine_cost              |
+| server_cost              |
++--------------------------+
+```
 
 
 
@@ -1801,11 +1906,23 @@ mysql> select * from mysql.server_cost;
 6 rows in set (0.00 sec)
 ```
 
-
+![](images/image-20220424120143131.png)
 
 ##### mysql.engine_cost表
 
 记录了在存储引擎层进行的一些操作所对应的成本常数。
+
+```mysql
+select * from mysql.engine_cost;
++-------------+-------------+------------------------+------------+---------------------+---------+---------------+
+| engine_name | device_type | cost_name              | cost_value | last_update         | comment | default_value |
++-------------+-------------+------------------------+------------+---------------------+---------+---------------+
+| default     |           0 | io_block_read_cost     |       NULL | 2021-11-04 20:48:00 | NULL    |             1 |
+| default     |           0 | memory_block_read_cost |       NULL | 2021-11-04 20:48:00 | NULL    |          0.25 |
++-------------+-------------+------------------------+------------+---------------------+---------+---------------+
+```
+
+![](images/image-20220424120306363.png)
 
 
 
@@ -1820,7 +1937,7 @@ InnoDB的统计信息是不精确的估计值。
 
 ### 13.1 统计数据的存储方式
 
-#### 13.2 基于磁盘的永久性统计数据
+### 13.2 基于磁盘的永久性统计数据
 
 存储在两个表中：
 
@@ -1837,21 +1954,66 @@ mysql> show tables from mysql like 'innodb%stats';
 
 #### innodb_table_stats
 
+![](images/image-20220424120755080.png)
+
 
 
 #### innodb_index_stats
+
+![](images/image-20220424120907596.png)
+
+主键是 (database_name, table_name, index_name, stat_name)，
+
+```mysql
+select * from mysql.innodb_index_stats where table_name = 'single_table';
++-----------------+--------------+--------------+---------------------+--------------+------------+-------------+-----------------------------------+
+| database_name   | table_name   | index_name   | last_update         | stat_name    | stat_value | sample_size | stat_description                  |
++-----------------+--------------+--------------+---------------------+--------------+------------+-------------+-----------------------------------+
+| charset_demo_db | single_table | PRIMARY      | 2022-04-24 11:51:14 | n_diff_pfx01 |          0 |           1 | id                                |
+| charset_demo_db | single_table | PRIMARY      | 2022-04-24 11:51:14 | n_leaf_pages |          1 |        NULL | Number of leaf pages in the index |
+| charset_demo_db | single_table | PRIMARY      | 2022-04-24 11:51:14 | size         |          1 |        NULL | Number of pages in the index      |
+| charset_demo_db | single_table | idx_key1     | 2022-04-24 11:51:14 | n_diff_pfx01 |          0 |           1 | key1                              |
+| charset_demo_db | single_table | idx_key1     | 2022-04-24 11:51:14 | n_diff_pfx02 |          0 |           1 | key1,id                           |
+| charset_demo_db | single_table | idx_key1     | 2022-04-24 11:51:14 | n_leaf_pages |          1 |        NULL | Number of leaf pages in the index |
+| charset_demo_db | single_table | idx_key1     | 2022-04-24 11:51:14 | size         |          1 |        NULL | Number of pages in the index      |
+| charset_demo_db | single_table | idx_key3     | 2022-04-24 11:51:14 | n_diff_pfx01 |          0 |           1 | key3                              |
+| charset_demo_db | single_table | idx_key3     | 2022-04-24 11:51:14 | n_diff_pfx02 |          0 |           1 | key3,id                           |
+| charset_demo_db | single_table | idx_key3     | 2022-04-24 11:51:14 | n_leaf_pages |          1 |        NULL | Number of leaf pages in the index |
+| charset_demo_db | single_table | idx_key3     | 2022-04-24 11:51:14 | size         |          1 |        NULL | Number of pages in the index      |
+| charset_demo_db | single_table | idx_key_part | 2022-04-24 11:51:14 | n_diff_pfx01 |          0 |           1 | key_part1                         |
+| charset_demo_db | single_table | idx_key_part | 2022-04-24 11:51:14 | n_diff_pfx02 |          0 |           1 | key_part1,key_part2               |
+| charset_demo_db | single_table | idx_key_part | 2022-04-24 11:51:14 | n_diff_pfx03 |          0 |           1 | key_part1,key_part2,key_part3     |
+| charset_demo_db | single_table | idx_key_part | 2022-04-24 11:51:14 | n_diff_pfx04 |          0 |           1 | key_part1,key_part2,key_part3,id  |
+| charset_demo_db | single_table | idx_key_part | 2022-04-24 11:51:14 | n_leaf_pages |          1 |        NULL | Number of leaf pages in the index |
+| charset_demo_db | single_table | idx_key_part | 2022-04-24 11:51:14 | size         |          1 |        NULL | Number of pages in the index      |
+| charset_demo_db | single_table | uk_key2      | 2022-04-24 11:51:14 | n_diff_pfx01 |          0 |           1 | key2                              |
+| charset_demo_db | single_table | uk_key2      | 2022-04-24 11:51:14 | n_leaf_pages |          1 |        NULL | Number of leaf pages in the index |
+| charset_demo_db | single_table | uk_key2      | 2022-04-24 11:51:14 | size         |          1 |        NULL | Number of pages in the index      |
++-----------------+--------------+--------------+---------------------+--------------+------------+-------------+-----------------------------------+
+20 rows in set (0.00 sec)
+```
 
 
 
 #### 定期更新统计数据
 
+- 开启Innodb_stats_auto_recalc
+
+- 手动调用Analyze Table语句来更新统计信息
 
 
-#### 手动更新
+
+#### 手动更新innodb_table_stats和innodb_index_stats表
 
 
 
 ### 13.3 基于内存的非永久性统计数据
+
+Innodb_stats_persistent
+
+
+
+### 13.4 innodb_stats_method的使用
 
 
 
