@@ -1692,7 +1692,7 @@ Create Table t1 (m1 int, n1 char(1));
 Create Table t2 (m2 int, n2 char(1));
 
 Insert Into t1 Values(1, 'a'), (2, 'b'), (3, 'c');
-Insert Into t2 Values (2, 'b'), (3, 'c'), (4, 'd')
+Insert Into t2 Values (2, 'b'), (3, 'c'), (4, 'd');
 ```
 
 
@@ -2019,9 +2019,11 @@ Innodb_stats_persistent
 
 ## 14 基于规则的优化（内含子查询优化二三事）
 
-**查询重写**
+**查询重写**：MySQL设计者依据一些规则，竭力把用户糟糕的查询语句转换成某种可以高效执行的形式的过程。
 
 ### 14.1 条件化简
+
+查询语句中的搜索条件本质上是**表达式**。
 
 #### 移除不必要的括号
 
@@ -2029,19 +2031,31 @@ Innodb_stats_persistent
 
 #### 常量传递
 
-
+```mysql
+a = 5 And b > a
+-- 转换成
+a = 5 And b > 5
+```
 
 #### 移除没用的条件
 
+对一些明显永远为TRUE或FALSE的表达式，优化器会将它们移除掉：
 
+```mysql
+(a < 1 Andy b = b) Or ( a = 6 Or 5 != 5)
+--
+(a < 1 And True) Or ( a = 6 Or False)
+```
 
 #### 表达式计算
 
+在查询执行之前，如果表达式中只包含常量的话，它的值会被先计算出来。
 
+> ==注意：==如果某个列不是以单独形式作为表达式的操作数，那么优化不会尝试对表达式进行简化。
 
 #### Having子句和Where子句的合并
 
-
+如果查询语句中没有出现诸如Sum、Max这样的聚集函数以及Group By子句，查询优化器就把Having子句和Where子句合并起来。
 
 #### 常量表检测
 
@@ -2049,15 +2063,117 @@ Innodb_stats_persistent
 
 ### 14.2 外连接消除
 
+在外连接查询中，指定的Where子句中包含被驱动表中的列不为NULL值得条件称为**空值拒绝（reject-NULL）**。这种情况下，外连接和内连接可以相互转换。
 
+转换带来的好处就是**优化器可以通过评估表的不同连接顺序的成本，选出成本最低的连接顺序来执行查询。**
 
 ### 14.3 子查询优化
 
 #### 子查询语法
 
+在一个查询语句中的**==某个位置==**也可以有另一个查询语句。
 
+- 在Select子句中
 
-#### 子查询在MySQL中是怎么执行的
+  ```mysql
+  Select (Select m1 From t1 Limit 1);
+  ```
+
+- 在From子句中国
+
+  ```mysql
+  Select m, n From (Select m2 + 1 As m, n2 As n From t2 Where m2 > 2) As t;
+  ```
+
+  派生表
+
+- 在Where或On子句的表达式中
+
+  ```mysql
+  Select * From t1 Where m1 In (Select m2 From t2);
+  ```
+
+语法支持子查询在Order By和Group By中，但没啥意义。
+
+##### 1.按返回的结果集 区分子查询
+
+- 标量子查询
+
+- 行子查询
+
+  ```mysql
+  Select * From t1 Where (m1, n1) = (Select m2, n2 From t2 Limit 1);
+  ```
+
+- 列子查询
+
+  ```mysql
+  Select * From t1 Where m1 In (Select m2 From t2);
+  ```
+
+- 表子查询：就是子查询结果既包含很多条记录，又包含很多个列。
+
+  ```mysql
+  Select * From t1 Where (m1, n1) In (Select m2, n2 From t2);
+  ```
+
+##### 2.按与外层查询的关系来 区分子查询
+
+- 不相关子查询：子查询可单独运行出结果
+- 相关子查询
+
+##### 3.子查询在布尔表达式中的使用
+
+- 使用=、>、<、>=、<=、<>、!=、<=>作为表达式的操作符(comparison_operator)
+
+  ```mysql
+  操作数 comparison_operator (子查询)
+  ```
+
+  操作数可以是：某个列名、常量、复杂的表达式、另一个子查询；
+
+  子查询只能是：标量子查询或行子查询。
+
+  ```mysql
+  Select * From t1 Where m1 < (Select Min(m2) From t2);
+  Select * From t1 Where (m1, n1) In (Select m2, n2 From t2 Limit 1);
+  ```
+
+- [Not] In/Any/Some/All 子查询
+
+  + `操作数 [Not] In (子查询)`
+
+  + `操作数 comparison_operator Any/Some(子查询)`
+
+    ```mysql
+    Select * From t1 Where m1 > Any(Select m2 From t2);
+    -- 等价于：
+    Select * From t1 Where m1 > (Select Min(m2) From t2);
+    ```
+
+  + `操作数 comparison_operator All(子查询)`
+
+    ```mysql
+    Select * From t1 Where m1 > All(Select m2 From t2);
+    ```
+
+- Exists子查询 `[Not] Exists (子查询)`
+
+  ```mysql
+  Select * From t1 Where Exists (Select 1 From t2);
+  ```
+
+  只要(Select 1 From t2)查询的结果集中有记录，Exists表达式的结果就位TRUE。
+
+##### 4.子查询语法注意事项
+
+- 子查询必须用小括号
+- 在Select子句中的子查询必须是标量子查询
+- 要想得到标量子查询或行子查询，但又不能保证子查询结果集只有一条记录时，可使用Limit 1
+- 对于[Not] In/Any/Some/All 子查询，不允许有Limit
+- 不允许在一条语句中增删改同时还对该表进行子查询
+
+#### 子查询在MySQL中是怎么执行的🔖
 
 
 
@@ -2065,11 +2181,13 @@ Innodb_stats_persistent
 
 ##### 3.In子查询优化
 
+物化表
+
 
 
 ##### 4.Any/All子查询优化
 
-
+![](images/image-20220425114003444.png)
 
 ##### 5.[Not]Exists子查询的执行
 
@@ -2110,35 +2228,49 @@ EXPLAIN 语句输中的各个列的作用
 |   filtered    | 针对预估的需要读取的记录，经过搜索条件过滤后剩余记录条数的百分比 |
 |     Extra     |                         一些额外信息                         |
 
-##### 
-
 ```mysql
 Create Table single_table (
-  id INT NOT NULL AUTO INCREMENT,
+  id INT NOT NULL AUTO_INCREMENT,
   key1 VARCHAR (100),
   key2 INT,
-  key3 VARCHAR (100),
+  key3 VARCHAR(100),
   key_part1 VARCHAR(100),
   key_part2 VARCHAR(100),
   key_part3 VARCHAR(100),
   common_field VARCHAR(100),
   PRIMARY KEY (id),
-  KEY idx_keyl (keyl),
+  KEY idx_key1 (key1),
   UNIQUE KEY uk_key2 (key2),
-  KEY idx key3 (key3),
-  KEY idx_key_part (key_partl, key_part2, key_part3)
+  KEY idx_key3 (key3),
+  KEY idx_key_part (key_part1, key_part2, key_part3)
 ) Engine=InnoDB CHARSET=utf8;
 ```
 
 
 
-### 15.1 执行计划输出中各列详解
+### 15.1 执行计划输出中各列详解🔖🔖
 
 #### table
 
 无论查询语句有多复杂，包含多少表，最后都是对每个表今夕单表访问。**Explain语句输出的每条记录都对应这某个单表的访问方法**。
 
 #### id
+
+查询语句中国没出现一次Select关键字，MySQL就会为它分配一个唯一的id值。
+
+```mysql
+Explain Select * From s1 Where key1 In (Select key1 From s2) Or key3 = 'a';
++----+--------------------+-------+------------+----------------+---------------+----------+---------+------+------+----------+-------------+
+| id | select_type        | table | partitions | type           | possible_keys | key      | key_len | ref  | rows | filtered | Extra       |
++----+--------------------+-------+------------+----------------+---------------+----------+---------+------+------+----------+-------------+
+|  1 | PRIMARY            | s1    | NULL       | ALL            | idx_key3      | NULL     | NULL    | NULL |    1 |   100.00 | Using where |
+|  2 | DEPENDENT SUBQUERY | s2    | NULL       | index_subquery | idx_key1      | idx_key1 | 303     | func |    1 |   100.00 | Using index |
++----+--------------------+-------+------------+----------------+---------------+----------+---------+------+------+----------+-------------+
+```
+
+
+
+Union子句
 
 
 
@@ -2155,6 +2287,17 @@ Create Table single_table (
 
 
 #### possible_keys和key
+
+possible_keys表示对某个表执行单表查询时可能用到的索引有哪些；key表示实际用到的索引。
+
+```mysql
+Explain Select * From s1 Where key1 > 'z' And key3 = 'a';
++----+-------------+-------+------------+------+-------------------+----------+---------+-------+------+----------+-------------+
+| id | select_type | table | partitions | type | possible_keys     | key      | key_len | ref   | rows | filtered | Extra       |
++----+-------------+-------+------------+------+-------------------+----------+---------+-------+------+----------+-------------+
+|  1 | SIMPLE      | s1    | NULL       | ref  | idx_key1,idx_key3 | idx_key3 | 303     | const |    1 |   100.00 | Using where |
++----+-------------+-------+------------+------+-------------------+----------+---------+-------+------+----------+-------------+
+```
 
 
 
@@ -2179,6 +2322,8 @@ Create Table single_table (
 
 
 ### 15.2 JSON格式的执行计划
+
+ JSON格式的执行计划里包含该计划花费的成本。
 
 ```mysql
 mysql> explain format=json select * from vendors\G;
@@ -2223,6 +2368,10 @@ No query specified
 
 ### 15.3  Extented Explain
 
+```mysql
+show warnings\G;
+```
+
 
 
 ## 16 神兵利器——optimizer trace的神奇功效
@@ -2243,7 +2392,7 @@ show variables like 'optimizer_trace';
 
 
 ```mysql
-Set optimizer_trace="enabled=on";
+mysql> Set optimizer_trace="enabled=on";
 ```
 
 
