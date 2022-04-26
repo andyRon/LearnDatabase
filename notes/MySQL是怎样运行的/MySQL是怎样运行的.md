@@ -2395,33 +2395,349 @@ show variables like 'optimizer_trace';
 mysql> Set optimizer_trace="enabled=on";
 ```
 
+开启后，就可以在表information_schema.optimizer_trace中查看完整的执行计划生成过程。这个表有四个字段：
+
+- QUERY：输入的查询语句。
+- TRACE：表示优化过程的JSON格式的文本。
+- MISSING_BYTES_BEYOND_MAX_MEM_SIZE：
+- INSUFFICIENT_PRIVILEGES：
+
+```mysql
+mysql> Set optimizer_trace="enabled=off";
+```
+
 
 
 ### 16.2 通过optimizer_trace分析查询优化器的具体工作过程
 
+```mysql
+Select * From s1 Where key1 > 'z' And key2 < 1000000 And key3 In('a', 'b', 'c') And common_field = 'abc';
+```
 
 
-prepare阶段
 
-optimize阶段
+```mysql
+mysql> select * from information_schema.optimizer_trace\G;
+*************************** 1. row ***************************
+QUERY: Select * From s1 Where key1 > 'z' And key2 < 1000000 And key3 In('a', 'b', 'c') And common_field = 'abc'
 
-execute阶段
+# 优化的具体过程
+TRACE: {
+  "steps": [
+    {
+      "join_preparation": {		# prepare阶段
+        "select#": 1,
+        "steps": [
+          {
+            "IN_uses_bisection": true
+          },
+          {
+            "expanded_query": "/* select#1 */ select `s1`.`id` AS `id`,`s1`.`key1` AS `key1`,`s1`.`key2` AS `key2`,`s1`.`key3` AS `key3`,`s1`.`key_part1` AS `key_part1`,`s1`.`key_part2` AS `key_part2`,`s1`.`key_part3` AS `key_part3`,`s1`.`common_field` AS `common_field` from `s1` where ((`s1`.`key1` > 'z') and (`s1`.`key2` < 1000000) and (`s1`.`key3` in ('a','b','c')) and (`s1`.`common_field` = 'abc'))"
+          }
+        ]
+      }
+    },
+    {
+      "join_optimization": {		# optimize阶段
+        "select#": 1,
+        "steps": [
+          {
+            "condition_processing": {		# 处理搜索条件
+              "condition": "WHERE",
+          		# 原始搜索条件
+              "original_condition": "((`s1`.`key1` > 'z') and (`s1`.`key2` < 1000000) and (`s1`.`key3` in ('a','b','c')) and (`s1`.`common_field` = 'abc'))",
+              "steps": [
+                {
+                	# 等值传递转换
+                  "transformation": "equality_propagation",
+                  "resulting_condition": "((`s1`.`key1` > 'z') and (`s1`.`key2` < 1000000) and (`s1`.`key3` in ('a','b','c')) and (`s1`.`common_field` = 'abc'))"
+                },
+                {
+                	# 常量传递转换
+                  "transformation": "constant_propagation",
+                  "resulting_condition": "((`s1`.`key1` > 'z') and (`s1`.`key2` < 1000000) and (`s1`.`key3` in ('a','b','c')) and (`s1`.`common_field` = 'abc'))"
+                },
+                {
+                	# 去除没用的条件
+                  "transformation": "trivial_condition_removal",
+                  "resulting_condition": "((`s1`.`key1` > 'z') and (`s1`.`key2` < 1000000) and (`s1`.`key3` in ('a','b','c')) and (`s1`.`common_field` = 'abc'))"
+                }
+              ]
+            }
+          },
+          {
+          	# 替换虚拟生成列
+            "substitute_generated_columns": {
+            }
+          },
+          {
+          	# 表的依赖信息
+            "table_dependencies": [
+              {
+                "table": "`s1`",
+                "row_may_be_null": false,
+                "map_bit": 0,
+                "depends_on_map_bits": [
+                ]
+              }
+            ]
+          },
+          {
+            "ref_optimizer_key_uses": [
+            ]
+          },
+          {
+          	# 预估不同单表访问方法的访问成本
+            "rows_estimation": [
+              {
+                "table": "`s1`",
+                "range_analysis": {
+                  "table_scan": {		# 全表扫描的行数以及成本
+                    "rows": 1,
+                    "cost": 2.45
+                  },
+              		# 分析可能使用的索引
+                  "potential_range_indexes": [
+                    {
+                      "index": "PRIMARY",  # 主键不可用
+                      "usable": false,
+                      "cause": "not_applicable"
+                    },
+                    {
+                      "index": "uk_key2",		# uk_key2可能被使用
+                      "usable": true,
+                      "key_parts": [
+                        "key2"
+                      ]
+                    },
+                    {
+                      "index": "idx_key1",
+                      "usable": true,
+                      "key_parts": [
+                        "key1",
+                        "id"
+                      ]
+                    },
+                    {
+                      "index": "idx_key3",
+                      "usable": true,
+                      "key_parts": [
+                        "key3",
+                        "id"
+                      ]
+                    },
+                    {
+                      "index": "idx_key_part",
+                      "usable": false,
+                      "cause": "not_applicable"
+                    }
+                  ],
+                  "setup_range_conditions": [
+                  ],
+                  "group_index_range": {
+                    "chosen": false,
+                    "cause": "not_group_by_or_distinct"
+                  },
+                  "skip_scan_range": {
+                    "potential_skip_scan_indexes": [
+                      {
+                        "index": "uk_key2",
+                        "usable": false,
+                        "cause": "query_references_nonkey_column"
+                      },
+                      {
+                        "index": "idx_key1",
+                        "usable": false,
+                        "cause": "query_references_nonkey_column"
+                      },
+                      {
+                        "index": "idx_key3",
+                        "usable": false,
+                        "cause": "query_references_nonkey_column"
+                      }
+                    ]
+                  },
+              		# 分析各种可能使用的索引的成本
+                  "analyzing_range_alternatives": {
+                    "range_scan_alternatives": [
+                      {
+                        "index": "uk_key2",
+                        "ranges": [
+                          "NULL < key2 < 1000000"
+                        ],
+                        "index_dives_for_eq_ranges": true,
+                        "rowid_ordered": false,
+                        "using_mrr": false,
+                        "index_only": false,
+                        "in_memory": 1,
+                        "rows": 1,
+                        "cost": 0.61,
+                        "chosen": true
+                      },
+                      {
+                        "index": "idx_key1",
+                        "ranges": [
+                          "'z' < key1"
+                        ],
+                        "index_dives_for_eq_ranges": true,
+                        "rowid_ordered": false,
+                        "using_mrr": false,
+                        "index_only": false,
+                        "in_memory": 1,
+                        "rows": 1,
+                        "cost": 0.61,
+                        "chosen": false,
+                        "cause": "cost"
+                      },
+                      {
+                        "index": "idx_key3",
+                        "ranges": [
+                          "key3 = 'a'",
+                          "key3 = 'b'",
+                          "key3 = 'c'"
+                        ],
+                        "index_dives_for_eq_ranges": true,
+                        "rowid_ordered": false,
+                        "using_mrr": false,
+                        "index_only": false,
+                        "in_memory": 1,
+                        "rows": 3,
+                        "cost": 1.81,
+                        "chosen": false,
+                        "cause": "cost"
+                      }
+                    ],
+              			# 分析使用索引合并的成本
+                    "analyzing_roworder_intersect": {
+                      "usable": false,
+                      "cause": "too_few_roworder_scans"
+                    }
+                  },
+              		# 对于上述单表查询s1最优的访问方法
+                  "chosen_range_access_summary": {
+                    "range_access_plan": {
+                      "type": "range_scan",
+                      "index": "uk_key2",
+                      "rows": 1,
+                      "ranges": [
+                        "NULL < key2 < 1000000"
+                      ]
+                    },
+                    "rows_for_plan": 1,
+                    "cost_for_plan": 0.61,
+                    "chosen": true
+                  }
+                }
+              }
+            ]
+          },
+          {
+          	# 分析各种可能的执行计划
+            "considered_execution_plans": [
+              {
+                "plan_prefix": [
+                ],
+                "table": "`s1`",
+                "best_access_path": {
+                  "considered_access_paths": [
+                    {
+                      "rows_to_scan": 1,
+                      "access_type": "range",
+                      "range_details": {
+                        "used_index": "uk_key2"
+                      },
+                      "resulting_rows": 1,
+                      "cost": 0.71,
+                      "chosen": true
+                    }
+                  ]
+                },
+                "condition_filtering_pct": 100,
+                "rows_for_plan": 1,
+                "cost_for_plan": 0.71,
+                "chosen": true
+              }
+            ]
+          },
+          {
+          	# 尝试给查询添加一些其他的查询条件
+            "attaching_conditions_to_tables": {
+              "original_condition": "((`s1`.`key1` > 'z') and (`s1`.`key2` < 1000000) and (`s1`.`key3` in ('a','b','c')) and (`s1`.`common_field` = 'abc'))",
+              "attached_conditions_computation": [
+              ],
+              "attached_conditions_summary": [
+                {
+                  "table": "`s1`",
+                  "attached": "((`s1`.`key1` > 'z') and (`s1`.`key2` < 1000000) and (`s1`.`key3` in ('a','b','c')) and (`s1`.`common_field` = 'abc'))"
+                }
+              ]
+            }
+          },
+          {
+            "finalizing_table_conditions": [
+              {
+                "table": "`s1`",
+                "original_table_condition": "((`s1`.`key1` > 'z') and (`s1`.`key2` < 1000000) and (`s1`.`key3` in ('a','b','c')) and (`s1`.`common_field` = 'abc'))",
+                "final_table_condition   ": "((`s1`.`key1` > 'z') and (`s1`.`key2` < 1000000) and (`s1`.`key3` in ('a','b','c')) and (`s1`.`common_field` = 'abc'))"
+              }
+            ]
+          },
+          {
+          	# 在稍微改进一下执行计划
+            "refine_plan": [
+              {
+                "table": "`s1`",
+                "pushed_index_condition": "(`s1`.`key2` < 1000000)",
+                "table_condition_attached": "((`s1`.`key1` > 'z') and (`s1`.`key3` in ('a','b','c')) and (`s1`.`common_field` = 'abc'))"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "join_execution": {
+        "select#": 1,
+        "steps": [
+        ]
+      }
+    }
+  ]
+}
+
+# 因优化过程文本太多而丢弃的文本字节大小，0表示并没有丢弃
+MISSING_BYTES_BEYOND_MAX_MEM_SIZE: 0
+          INSUFFICIENT_PRIVILEGES: 0
+1 row in set (0.01 sec)
+```
+
+
+
+优化过程大致分为3个阶段：
+
+- prepare阶段
+
+- optimize阶段。"rows_estimation"
+
+- execute阶段
 
 
 
 ## 17 调节磁盘和CPU的矛盾——InnoDB的Buffer Pool
 
-Buffer Pool是InnoDB想操作系统申请的一段连续的内存空间。
+**Buffer Pool（缓存池）**是InnoDB向操作系统申请的一段连续的内存空间。用于缓存磁盘中的页。
 
 ### 17.2 Buffer Pool
 
-**innodb_buffer_pool_size**， 默认128MB，最小5MB
+**innodb_buffer_pool_size**， 默认128MB，最小5MB。
 
 #### 内部组成
 
-缓冲页
+**缓冲页**：Buffer Pool中的页。为了区别磁盘中页。
 
-控制块
+每个缓冲页都有一个占用相同内存的控制信息，叫作**控制块**。这些信息包括该页所属的表空间编号、页号、缓冲页在Buffer Pool中的地址、链表节点信息等。
+
+控制块和缓冲页一一对应，并且控制块在缓冲池的前面。
 
 ![](images/image-20220414094849328.png)
 
@@ -2429,23 +2745,31 @@ Buffer Pool是InnoDB想操作系统申请的一段连续的内存空间。
 
 #### free链表的管理
 
+> 怎么区分Buffer Pool中哪些缓冲页是空闲的？
+
+所有空闲的缓冲页对应的控制块作为一个节点放到一个链表中，**==free链表==**。
+
 ![](images/image-20220414095000221.png)
 
 
 
 #### 缓冲页的哈希处理
 
+> 怎么知道某页在不在Buffer Pool中？
 
+表空间号+页号 定位一个页，作为一个key，缓冲页控制块就是对应的value。哈希表。
 
 #### flush链表的管理
+
+如果修改了缓冲页中的数据，就会和磁盘上的页数据不一致，这样的缓冲页叫作**脏页（dirty page）**。
+
+隔一段时间统一把脏页中刷新到磁盘上。为了管理这些脏页，另外创建一个存储脏页的链表，**==flush链表==**。
 
 ![](images/image-20220414095211062.png)
 
 
 
-#### LRU链表的管理
-
-
+#### LRU链表的管理🔖
 
 ##### 1.缓冲区不够的窘境
 
@@ -2463,13 +2787,23 @@ Buffer Pool是InnoDB想操作系统申请的一段连续的内存空间。
 
 
 
+#### 其他一些链表
+
+
+
 #### 刷新脏页到磁盘
 
 
 
 #### 多个Buffer Pool实例
 
+在Buffer Pool特别大并且多线程并发访问量（各种链表需要加锁处理）特别高的情况下，单一的Buffer Pool可能会影响请求的处理速度。可以把大Buffer Pool拆分成若干个小的Buffer Pool。
+
+`innodb_buffer_pool_instantces`
+
 ![](images/image-20220414095536277.png)
+
+
 
 #### innodb_buffer_pool_chunk_size
 
@@ -2514,49 +2848,114 @@ I/O sum[0]:cur[0], unzip sum[0]:cur[0]
 
 ### 18.1 事务的起源
 
-#### 原子性
+大部分程序员的任务就是==把现实世界的业务场景映射到数据库世界中==。
+
+#### 原子性（Atomicity）
 
 
 
-#### 隔离性
+#### 隔离性（Isolation）
 
 
 
-#### 一致性
+#### 一致性（Consistency）
 
 
 
-#### 持久性
+#### 持久性（Durability）
 
 
+
+### 18.2 事务的概念
+
+ACID
+
+设计者把需要保证原子性、隔离性、一致性和持久性的**一个或多个**数据库操作称为**==事务（transaction）==**。
+
+数据库设计者根据这些操作所执行的不同阶段把事务大致划分为：
+
+- 活动的（active）
+- 部分提交的（partially commited）
+- 失败的（failed）
+- 中止的（aborted）
+- 提交的（committed）
+
+![](images/image-20220426151823634.png)
 
 ### 18.3 MySQL事务的语法
 
 #### 开启事务
 
+- `Begin [Work];`
+
+```mysql
+
+```
+
+- `Start Transaction;`与begin语句相同，标志着开启一个事务。
+  - `Read Only`：属于该事务的数据库操作只能读取数据，不能修改数据。
+  - `Read Write`
+  - `With Consistent Snapshot`：启动一致性读。
+
+```mysql
+Start Transaction Read Only;
+
+Start Transaction Read Only, With Consistent Snapshot;
+```
+
 
 
 #### 提交事务
+
+```mysql
+Commit [Work];
+```
 
 
 
 #### 手动中止事务
 
+```mysql
+Rollback [Work];
+```
+
 
 
 #### 支持事务的存储引擎
 
+MySQL中只有InnoDB和NDB。
 
+如果某个事务中包含的语句要修改某个表中的数据，但是该表使用的存储引擎不支持事务，那么对该表所做的修改将无法进行回滚。
 
 #### 自动提交
 
+```mysql
+Show variables Like 'autocommit';
++---------------+-------+
+| Variable_name | Value |
++---------------+-------+
+| autocommit    | ON    |
++---------------+-------+
+```
 
+默认开启，也就是说如果不显示地使用Start Transaction或Begin语句开启一个事务，那么**每一条语句都算是一个独立的事务**，这种特性称为事务的自动提交。
 
 #### 隐式提交
 
-
+- 定义或修改数据库对象的数据定义语言（DDL，Data Definition Language）
 
 #### 保存点
+
+保存点（savepoint）：在事务对应的数据库语句中“打”几个点。给Rollback语句回滚。
+
+```mysql
+Savepoint 保存点名称；
+Release Savepoint 保存点名称；
+```
+
+```mysql
+Rollback [Work] To [SavePoint] 保存点名称;
+```
 
 
 
