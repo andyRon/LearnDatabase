@@ -2961,29 +2961,51 @@ Rollback [Work] To [SavePoint] 保存点名称;
 
 ## 19 说过的话就一定要做到——redo日志
 
-
-
 ### 19.2 redo日志是啥
 
+InnoDB是以页为单位来管理存储空间的，增删改查操作从本质来说都是在**访问页面（包括读页面、写页面、创建新页面等操作）**。
 
+没有必要在每次提交事务时就把该事务在内存中修改过的全部页面刷新到磁盘，只需要把修改的内容记录一下就好。
 
 在系统因奔溃而重启时需要按照上述内容所记录的步骤重新更新数据页，上述内容称为**重做日志（redo log）**。
+
+相较于在事务提交时将所有修改过的内存中的页面刷新到磁盘中，只将该事务执行过程中产生的redo日志刷新到磁盘具有一些好处：
+
+- redo日志占用空间小
+- redo日志是顺序写入磁盘的：在执行事务的过程中，每执行一条语句，就可能产生若干条redo日志，这些日志是按照产生的顺序写入磁盘的，也就是使用顺序I/O。
 
 
 
 ### 19.3 redo日志格式
 
-redo日志只是记录了一下事务对数据库进行了哪些修改。
+redo日志只是记录了一下事务对数据库进行了哪些修改。InnoDB设计对事务对数据库的不同修改场景，定义了多种类型的redo日志。
 
 ![](images/image-20220414101644203.png)
 
+- type
+- space ID：表空间ID
+- page number：页号
+- data
+
 #### 简单的redo日志类型
 
+**Max Row ID**
 
+只记录在某个页面的某个偏移量修改了几个字节的值、具体修改后的内容是啥，这种简单的redo日志叫**物理日志**，根据在页面中写入数据的多少划分：
+
+- MLOG_1BYTE
+- MLOG_2BYTE
+- MLOG_4BYTE
+- MLOG_8BYTE
+- MLOG_WRITE_STRING
+
+![](images/image-20220427094533770.png)
+
+![](images/image-20220427094545599.png)
 
 #### 复杂一些的redo日志类型
 
-
+![](images/image-20220427094817009.png)
 
 ### 19.4 Mini-Transaction（MTR）
 
@@ -3003,9 +3025,13 @@ MTR生成的redo日志存储在512字节的页，这个页叫作**redo log block
 
 #### redo日志缓冲区
 
+类比引入Buffer Pool，写入redo日志时也不能直接写到磁盘中，实际上在服务器启动时就向操作系统申请了一大片称为**redo log buffer（redo日志缓冲区）**的连续内存空间，简称log buffer。
+
 ![](images/image-20220414102927617.png)
 
 #### redo日志写入log buffer
+
+`buf_free`
 
 ![](images/image-20220414103020062.png)
 
@@ -3015,17 +3041,34 @@ MTR生成的redo日志存储在512字节的页，这个页叫作**redo log block
 
 #### redo日志刷盘时机
 
-
+- Log buffer 空间不足时
+- 事务提交时
+- 正常关闭服务器时
+- 做checkpoint时
 
 #### redo日志文件组
 
+MySQL的数据目录中的**ib_logfile0**和**ib_logfile1**两个文件就是log buffer默认刷盘的两个磁盘文件。
 
+- innodb_log_group_home_dir：指定redo日志文件所在目录，默认为当前数据目录
+- innodb_log_file_size
+- innodb_log_file_in_group：指定redo日志文件的个数，默认为2，最大为100。
 
 #### redo日志文件格式
 
+![](images/image-20220427100801011.png)
 
+![](images/image-20220427100815758.png)
+
+![](images/image-20220427100833031.png)
+
+![](images/image-20220427100951545.png)
+
+![](images/image-20220427101002779.png)
 
 ### 19.7 log sequence number（lsn）
+
+全局变量**log sequence number（lsn）**，用来记录当前总共已经写入的redo日志量。
 
 #### flushed_to_disk_lsn
 
@@ -3033,13 +3076,17 @@ MTR生成的redo日志存储在512字节的页，这个页叫作**redo log block
 
 #### lsn值和redo日志文件组中的偏移量的对应关系
 
-
+![](images/image-20220427101230284.png)
 
 #### flush链表中的lsn
 
-
+![](images/image-20220427101252144.png)
 
 ### 19.8 checkpoint
+
+判断某些redo日志占用的磁盘空间是否可以覆盖的依据，就是它对应的脏页是否已经被刷新到了磁盘中。
+
+![](images/image-20220427101502974.png)
 
 
 
@@ -3076,11 +3123,33 @@ Last checkpoint at           62003410
 
 ### 19.12 崩溃恢复
 
+#### 确定恢复的起点
+
+
+
+#### 确定恢复的终点
+
+
+
+#### 怎么恢复
+
+
+
+### 19.13 遗留问题：LOG_BLOCK_HDR_NO是如何计算的
+
+
+
 
 
 ## 20 后悔了怎么办——undo日志
 
 ### 20.1 事务回滚的需求
+
+每当要对一条记录进行修改是（Insert、Delete、Update），都需要留一手——**把回滚时所需要的东西都记下来**：
+
+- 在插入一条记录时，至少要把这条记录的主键值记下来，这样之后回滚时只需要把这个主键值对应的记录删掉就好了；
+- 在删除一条记录时，至少要把这条记录中的内容都记下来，这样之后回滚时再把由这些内容组成的记录插入到表中就好了；
+- 在修改一条记录时，至少要把被更新的列的旧值记下来，这样之后回滚时再把这些列更新为旧值就好了。
 
 为了回滚而记录的东西称为**撤销日志（undo log）**。
 
@@ -3090,7 +3159,7 @@ Last checkpoint at           62003410
 
 #### 分配事务id的时机
 
-
+如果某个事务在执行过程中对某个表执行了增删改操作，那么InnoDB就会给它分配一个独一无二的事务id。
 
 #### 事务id是怎么生成的
 
@@ -3101,6 +3170,18 @@ Last checkpoint at           62003410
 
 
 ### 20.3 undo日志的格式
+
+```mysql
+Create Table undo_demo (
+	id Int Not Null,
+  key1 Varchar(100),
+  col Varchar(100),
+  Primary Key (id),
+  Key idx_key1 (key1)
+) Engine=InnoDB Charset=utf8;
+```
+
+
 
 #### Insert操作对应的undo日志
 
@@ -3122,9 +3203,15 @@ Last checkpoint at           62003410
 
 ![](images/image-20220414104906978.png)
 
+![](images/image-20220427105910332.png)
+
+![](images/image-20220427105923884.png)
+
 
 
 ### 20.5 FIL_PAGE_UNDO_LOG页面
+
+FIL_PAGE_UNDO_LOG类型的页面是**专门用来存储undo日志的**，简称Undo页面。
 
 ![](images/image-20220414105012613.png)
 
@@ -3142,7 +3229,13 @@ Last checkpoint at           62003410
 
 ### 20.7 undo日志具体写入过程
 
+#### Undo Log Segment Header
 
+![](images/image-20220427110659584.png)
+
+第一个页面比普通页面多了一个Undo Log Segment Header。
+
+#### Undo Log Header
 
 ### 20.8 重用Undo页面
 
