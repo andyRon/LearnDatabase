@@ -3262,17 +3262,28 @@ Create Table hero (
   country Varchar(100),
   Primary Key (number)
 ) Engine=Innodb Charset=utf8;
+
+Insert Into hero Values(1, '刘备', '蜀');
 ```
 
 
 
 ### 21.2 事务隔离级别
 
+服务器可以同时处理来自多个客户端的多个事务。
 
+事务的隔离性
+
+串行执行
+
+可串行化执行
 
 #### 事务并发执行时遇到的一致性问题
 
-
+- 脏写（Dirty Write）
+- 脏读（Dirty Read）
+- 不可重复读（Non-Repeatable Read）
+- 幻读（Phantom）
 
 #### SQL标准中的4中隔离级别
 
@@ -3286,21 +3297,59 @@ Create Table hero (
 
 #### MySQL中支持的4中隔离级别
 
+```mysql
+Set [Global|Session] Transaction Isolation Level level;
+```
 
+level的4个可选值：Repeatable Read、Read Committed、Read Uncommitted、Serializable。
+
+```mysql
+Show variables Like 'transaction_isolation';
+-- 简写
+Select @@transaction_isolation;
+```
+
+![](images/image-20220428101355116.png)
 
 ### 21.3 MVCC原理
 
 #### 版本链
 
+聚簇索引记录中包含两个必要的隐藏列：
+
+- trx_id：一个事务每次对某条聚簇索引记录进行改动时，都会把该事务的事务id赋值给这个隐藏列。
+- roll_pointer：每次对某条聚簇索引记录进行改动时，都会把旧的版本写入到undo日志。这个隐藏列相当于一个指针，可通过它找到该记录修改前的信息。
+
 **多版本并发控制（Multi-Version Concurrency COntrol，MVCC）**
-
-
 
 #### ReadView
 
+> 核心问题：需要判断版本链中的那个版本是当前事务可见的。
 
+- m_ids
+- min_trx_id
+- max_trx_id
+- creator_trx_id
+
+##### 1.Read Committed——每次读取数据前都生成一个ReadView
+
+
+
+##### 2.Repeatable Read——在第一次读取数据时生成一个ReadView
+
+
+
+#### 二级索引与MVCC
+
+
+
+#### MVCC小结
+
+MVCC指在使用Read Committed、Repeatable Read这两种隔离级别的事务执行普通的Select操作时，访问记录的版本链的过程。
 
 ### 21.4 关于purge
+
+为了节约存储空间，我们应该在合适的时候把update undo日志以及仅仅被标记为删除的记录彻底删除掉，这个删除操作就称为**purge**（净化）。
 
 
 
@@ -3310,7 +3359,12 @@ Create Table hero (
 
 #### 写-写情况
 
+锁结构中两个比较重要的属性：
 
+- trx信息：表示这个锁与哪个事务关联
+- is_waiting：表示当前事务是否在等待
+
+![](images/image-20220428104953740.png)
 
 #### 读-写或写-读情况
 
@@ -3318,13 +3372,19 @@ Create Table hero (
 
 #### 一致性读
 
+事务利用MVCC进行的读取操作称为**一致性读（Consistent Read）**。
 
+所有普通的Select语句在Read Committed、Repeatable Read隔离级别下都算是一致性读。
+
+一致性读并不会对表中的任何记录进行加锁操作，其它事务可以自由地对表中的记录进行改动。
 
 #### 锁定读
 
 ##### 1.共享锁和独占锁
 
+共享锁（Shared Lock，简称**==S锁==**）
 
+独占锁/排他锁（Exclusive Lock，简称**==X锁==**）
 
 ##### 2.锁定读的语句
 
@@ -3336,7 +3396,11 @@ Create Table hero (
 
 ### 22.2 多粒度锁
 
+意向锁（Intention Lock）
 
+意向共享锁（Intention Shared Lock，简称IS锁）
+
+意向独占锁（Intention Exclusive Lock，简称IX锁）
 
 ### 22.3 MySQL中的行锁和表锁
 
@@ -3346,9 +3410,19 @@ Create Table hero (
 
 #### InnoDB中的锁
 
+##### 1.InnoDB中的表级锁
+
+- 表级别的S锁、X锁
+- 表级别的IS锁、IX锁
+- 表级别的Auto-INC锁
+
+##### 2.InnoDB中的行级锁🔖
+
 
 
 #### InnoDB锁的内存结构
+
+对一条记录加锁的本质就是在内存中创建一个锁结构与之关联（隐式锁除外）。
 
 ![](images/image-20220414113251107.png)
 
@@ -3366,7 +3440,7 @@ Create Table hero (
 
 #### 半一致性读的语句
 
-半一致性读的语句（Semi-COnsistent Read）是一种夹在一致性读和锁定读之间的读取方式
+半一致性读的语句（Semi-COnsistent Read）是一种夹在一致性读和锁定读之间的读取方式。
 
 
 
@@ -3374,11 +3448,27 @@ Create Table hero (
 
 
 
+##### 1.遇到重复键（duplicate key）
+
+
+
+##### 2.外键检测
+
+
+
 ### 22.5 查看事务加锁情况
 
 #### 使用information_schema数据库中的表索取锁信息
 
+**INNODB_TRX**表存储了InnoDB当前正在执行的事务信息。
 
+**INNODB_LOCKS**
+
+**INNODB_LOCK_WAITS**
+
+
+
+#### 使用Show Engine Innodb Status获取锁信息
 
 ### 22.6 死锁
 
@@ -3386,7 +3476,9 @@ Create Table hero (
 
 
 
+### 总结
 
+MVCC和加锁是解决并发事务带来的一致性问题的两种方式。
 
 
 
