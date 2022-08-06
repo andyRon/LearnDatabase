@@ -1,4 +1,4 @@
-MySQL是怎样运行的
+《MySQL是怎样运行的》笔记
 ----
 
 ## 1 初始MySQL
@@ -28,7 +28,7 @@ mysql.server stop
 
 `mysqld_multi`可以启动或停止多个服务器进程，也能报告他们的运行状态。
 
-上面是三个命令都是基于mysqld的shell脚本。
+`mysqld_safe`、`mysql.server`、`mysqld_multi`都是基于mysqld的shell脚本。
 
 ### 启动MySQL客服端程序
 
@@ -42,9 +42,9 @@ exit
 
 ### 客服端与服务器连接的过程
 
-客服端进程向服务器进程发送请求并得到响应的过程本质上是一个**进程间通信**的过程。MySQL支持几种进程通信方式。
+客服端进程向服务器进程发送请求并得到响应的过程本质上是一个**==进程间通信==**的过程。MySQL支持几种进程通信方式。
 
-#### TCP/IP
+#### 1 TCP/IP
 
 mysql服务端进程默认监听3306端口，使用`-P`修改：
 
@@ -58,14 +58,14 @@ mysqld -P3307
 mysql -uroot -h127.0.0.1 -P3307 -p
 ```
 
-#### 命名管道和共享内存
+#### 2 命名管道和共享内存
 
 windows特有的。
 
 - 命名管道。分别在启动服务器程序和客服端程序时加上，`--enable-named-pipe`和`--pipe`/`--protocal=pipe`。
 - 共享内存。分别在启动服务器程序和客服端程序时加上，`--shared-memory`和`--protocal==memory`。
 
-#### Unix域套接字
+#### 3 Unix域套接字
 
 在类Unix的同一台机器上。
 
@@ -138,13 +138,13 @@ Create Table 表名(
 Alter Table 表名 Engine = 存储引擎名称;
 ```
 
-d的，d的,的，，,的,的的
+
 
 ## 2 MySQL的调控按钮——启动选项和系统变量
 
 ### 2.1 启动选项和配置文件
 
-启动选项（startup option），控制着程序启动后的行为。
+**==启动选项（startup option）==**，控制着程序启动后的行为。
 
 启动选项可以在命令行中指定，也可以在配置文件中指定。
 
@@ -368,19 +368,19 @@ mysql> show status like 'thread%';
 
 #### 一些重要的字符集
 
-- ASCII字符集。128个字符，一个字节编码。
+- **ASCII字符集**。128个字符，一个字节编码。
 
-- ISO 8859-1字符集（Latin1）。256个字符（在ASCII基础扩充了128个西欧常用字符）。一个字节编码。
+- ISO 8859-1字符集（**Latin1**）。256个字符（在ASCII基础扩充了128个西欧常用字符）。一个字节编码。
 
-- GB2312字符集。6762个汉字+682个其它。对应ASCII字符的一个字节编码，其它两个字节编码。（**变长编码方式**）
+- **GB2312字符集**。6762个汉字+682个其它。对应ASCII字符的一个字节编码，其它两个字节编码。（**变长编码方式**）
 
   > <u>计算机读取一个字节序列时，怎么区分某个字节代表的是一个单独的字符还是某个字符的一部分呢？</u>
   >
   > ASCII的最高位默认为0，如果为1就是两个字节代表一个单独的字符。
 
-- GBK字符集。对GB2312的扩充。
+- **GBK字符集**。对GB2312的扩充。
 
-- UTF-8字符集。几乎收录世界各国使用的字符，而且还在不断扩充。1~4个字节编码。
+- **UTF-8字符集**。几乎收录世界各国使用的字符，而且还在不断扩充。1~4个字节编码。
 
   > UTF-8只是Unicode字符集的一中编码方案，其它有UTF-16（2或4字节编码）、UTF-32（4字节编码）。
 
@@ -390,7 +390,12 @@ mysql> show status like 'thread%';
 
 #### MySQL中的utf8和utf8mb4
 
-- uft8mb3（简称utf8）：阉割过的UTF-8字符集，只使用1~3字节。
+- Utf8mb3（简称utf8）：阉割过的UTF-8字符集，只使用1~3字节。
+
+  > UTF-8：8-bit Unicode Transformation Format
+  >
+  > mb3:  **m**aximun of **3** **b**ytes per multibyte character
+
 - utf8mb4：正宗的UTF-8字符集，1~4个字节。MySQL8.0已经优化，默认字符集。
 
 #### 字符集的查看
@@ -400,7 +405,7 @@ mysql> show status like 'thread%';
 Show (Character Set|Charset) [Like 匹配的模式];
 ```
 
-#### 比较规程的查看
+#### 比较规则的查看
 
 ```mysql
 Show Collation [Like 匹配的模式];
@@ -451,9 +456,9 @@ mysql> show Collation Like 'utf8\_%';
 
 #### 各级别的字符集和比较规则
 
-##### 1.服务级别
+##### 1.服务器级别
 
-服务级别的字符集和比较规则的系统变量：character_set_server, collation_server
+服务器级别的字符集和比较规则的系统变量：`character_set_server`, `collation_server`
 
 ##### 2.数据库级别
 
@@ -477,7 +482,7 @@ Collate gb2312_chinese_ci;
 
 
 
-对应的系统变量：character_set_database, collation_database
+对应的系统变量：`character_set_database`, `collation_database`
 
 ##### 3.表级别
 
@@ -529,9 +534,9 @@ Alter Table 表名 Modify 列名 字符串类型 [Character set 字符集名称]
 
 ##### 1.编码和解码使用的字符集不一致
 
-> '我'在UTF-8字符集编码下的字节序列是0xE68891。如果程序A把这个字节序列发送到程序B，程序B使用不同的字符集解码（假设使用GBK），过程如下：（可通过在线工具 [汉字字符集编码查询](https://www.qqxiuzi.cn/bianma/zifuji.php) 测试）
+> `我`在UTF-8字符集编码下的字节序列是0xE68891。如果程序A把这个字节序列发送到程序B，程序B使用不同的字符集解码（假设使用GBK），过程如下：（可通过在线工具 [汉字字符集编码查询](https://www.qqxiuzi.cn/bianma/zifuji.php) 测试）
 >
-> a. 首先看第一个字节0xE6，大于0x7F（十进制127），说明待读取字符是两字节编码。继续读一字节后得到 OxE688，然后从 GBK 编码表中查找字节为 0xE688 对应的字符，发现是字符'鎴'。
+> a. 首先看第一个字节0xE6，大于0x7F（十进制127），说明待读取字符是两字节编码。继续读一字节后得到 OxE688，然后从 GBK 编码表中查找字节为 0xE688 对应的字符，发现是字符`鎴`。
 > b. 继续读一个字节 0x91，它的值也大于 0x7F，试图再读一个字节时发现后边没有了，所以这是半个字符。
 > c. 最终，0xE68891被 GBK 字符集解释成一个字符'鎴'和半个字符。
 
@@ -598,11 +603,11 @@ mysql> Select * From t Order By col;
 
 ### InnoDB页简介
 
-InnoDB以**页**作为磁盘和内存之间交互的基本单位。页的大小一般为16KB（16384）。对应系统变量是`innodb_page_size`，只能在第一次<u>初始化MySQL数据目录</u>时指定，服务器运行时不能更改。
+InnoDB以**页**作为磁盘和内存之间交互的基本单位。页的大小一般为16KB（16*1024=16384）。对应系统变量是`innodb_page_size`，只能在第一次<u>初始化MySQL数据目录</u>时指定，服务器运行时不能更改。
 
 ### InnoDB行格式
 
-4中**行格式**（也叫作**记录格式**）：Compact、Redundant、Dynamic、Compressed。
+4中**==行格式==**（也叫作**==记录格式==**）：Compact、Redundant、Dynamic、Compressed。
 
 #### 指定行格式的语法
 
@@ -648,7 +653,7 @@ MySQL支持一些变长的数据类型：Varchar(M)、Varbinary(M)、各种Text�
 
 变长字段占用的存储空间分为两个部分：**真正的数据内容；该数据占用的字节数**。
 
-**逆序存放**
+各变长字段的真实数据占用的字节数按照列的顺序**==逆序存放==**（如下面的c4、c2、c1）。
 
 表record_format_demo的c1、c2、c4字段都是varchar(10)，这3个列的值<u>占用的存储空间字节数</u>保存在记录开头处。
 
@@ -674,7 +679,7 @@ MySQL支持一些变长的数据类型：Varchar(M)、Varbinary(M)、各种Text�
 
 总结：<u>如果该变长字段允许存储的最大字节数（M * W）超过255字节，并且真实数据占用的字节数(L）超过 127字节，则使用2字节来表示真实数据占用的字节数，否则使用 1字节。</u>
 
-**变长字段长度列表中只存储值为非NULL 的列的肉容长度。**
+**变长字段长度列表中只存储值为非NULL 的列的内容长度。**
 
 ![](images/image-20220406163610261.png)
 
@@ -682,7 +687,27 @@ MySQL支持一些变长的数据类型：Varchar(M)、Varbinary(M)、各种Text�
 
 Compact行格式把一条记录中值为NULL的行统一管理起来（节省空间），存储在NULL值列表中。
 
-🔖
+处理过程：
+
+1. 首先统计表中允许存储NULL的列有哪些。
+
+   主键列和NOT NULL列不会被统计。
+
+2. 每个允许存储NULL的列对应一个二进制位，二进制位按照列的顺序**逆序排列**。二进制位为1表示该列的值为NULL，0表示不为NULL。
+
+   如果表中没有允许存储NULL的列，则NULL值列表就不存在。
+
+3. 规定NULL值列表必须使用**整数个字节的位**表示，如果不够，字节的高位补0。
+
+   如之前表的表只有3个列允许为NULL（c2是NOT NULL，不统计）：
+
+   ![](images/image-20220630082529189.png)
+
+   第一条记录的c1、c3、c4都不为NULL，二进制位都为0；第二条记录的c3、c4为NULL，二进制位为1：
+
+    ![](images/image-20220630083025249.png)           
+
+这两条记录的填充NULL值列表后：
 
 ![](images/image-20220406163847903.png)
 
