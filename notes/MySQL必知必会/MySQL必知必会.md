@@ -32,7 +32,7 @@ MySQL 三种注释：
 
 ### 2 MySQL简介
 
-DBMS分两类：基于共享文件系统（如Microsoft Access、FileMaker）；基于客户机-服务器（如mysql、oracle）。  
+DBMS分两类：==基于共享文件系统==（如Microsoft Access、FileMaker）；==基于客户机-服务器==（如mysql、oracle）。  
 
 <u>服务器部分</u>是负责所有数据访问和处理的一个软件（运行在叫做**数据库服务器**的计算机上）；<u>客户机</u>是与用户打交道的软件，可以是mysql提供的工具（命令行，mysql administrator等），脚本语言（如perl），web应用开发（如ASP，php），程序设计语言（如C，C++，Java）等。
 
@@ -76,7 +76,7 @@ $ mysql -u root -p
 
 ```mysql
 -- 新建用户
-create user "username"@"host" identified by "password";
+create user "username"@"host" Identified by "password";
 
 -- 查看当前所有用户
 select user,host from mysql.user;
@@ -196,25 +196,45 @@ select prod_name, prod_price, from products where vend_id NOT IN (1002, 1003) or
 
 `%`  表示任意字符出现任意多次(**不能匹配NULL**)
 
+`_` 只匹配单个字符
+
 ```mysql
 select prod_id, prod_name from products where prod_name LIKE 'jet%';
 ```
 
-`_` 只匹配单个字符
-
-慎用通配符；尽量不要在模式的开始使用；
-
+慎用通配符，尽量不要用在搜索模式的开始处。
 
 ### 9 正则匹配
 
+正则表达式是用来匹配文本的==特殊的串（字符集合）==。
+
 mysql正则仅为正则表达式的一个很小的子集，不区分大小写。
+
+#### 基本字符匹配
 
 ```mysql
 -- 包含1000的匹配几个字符之一
 select prod_name from products where prod_name REGEXP'1000' order by prod_name;  
+
+select prod_name from products where prod_name REGEXP'.000' order by prod_name;  
 ```
 
+LIKE与REGEXP有一个差别：LIKE匹配整个列。
 
+```mysql
+-- 匹配不到 --
+select prod_name from products where prod_name like '1000'; 
+-- --
+select prod_name from products where prod_name like 'J%1000'; 
+```
+
+`REGEXP BINARY` 用以区分大小写，如 `WHERE prod_name REGEXP BINARY 'JetPack .000'`，需要注意的是一些排序规则是不支持区分大小写的。
+
+#### OR匹配
+
+`REGEXP '1000|2000'`   or匹配
+
+#### 匹配几个字符之一
 
 ```mysql
 mysql> select prod_name from products where prod_name REGEXP '[123] Ton';
@@ -226,13 +246,17 @@ mysql> select prod_name from products where prod_name REGEXP '[123] Ton';
 +-------------+
 ```
 
-` REGEXP BINARY 'JetPack .000'`  区分大小写
+类似 `REGEXP '1|2|3 Ton'`。
 
-`REGEXP '[1-5] Ton'`   匹配范围
+排除 `[^123]`。
 
-`regexp '1000|2000'`   or匹配
+#### 匹配范围
 
-`REGEXP '\\.'` 匹配含.等(\f 换页，\n 换行，\r 回车)特殊字符
+`REGEXP '[1-5] Ton'` 
+
+#### 匹配特殊字符
+
+`REGEXP '\\.'`， 匹配含`.`的。
 
 ```mysql
 mysql> select vend_name from vendors where vend_name regexp '\\.' order by vend_name;
@@ -242,6 +266,12 @@ mysql> select vend_name from vendors where vend_name regexp '\\.' order by vend_
 | Furball Inc. |
 +--------------+
 ```
+
+其它还有，`\\-`，`\\|`，`\\\`等，还有空白字符：
+
+![](images/image-20230222114112508.png)
+
+
 
 #### 匹配字符类
 
@@ -301,6 +331,8 @@ mysql> select prod_name from products where prod_name regexp '[[:digit:]]{4}' or
 +--------------+
 ```
 
+![](images/image-20230222114310093.png)
+
 #### 定位符
 
 `regexp '^[0-9\\.]'` 匹配以数字或者.开头的。
@@ -315,6 +347,8 @@ mysql> select prod_name from products where prod_name regexp '^[0-9\\.]';
 | 2 ton anvil  |
 +--------------+
 ```
+
+![](images/image-20230222114539393.png)
 
 ### 10 创建计算字段
 
@@ -402,6 +436,36 @@ mysql> select cust_id, order_num from orders where Date(order_date) Between '200
 
 ![](../../images/learn-database-022.jpg)
 
+#### 系统函数
+
+系统信息函数用来查询MySQL数据库的系统信息。
+
+| 函数                                  | 说明                             |
+| ------------------------------------- | -------------------------------- |
+| VERSION()                             | 获取数据库的版本号。             |
+| CONNECTION_ID()                       | 获取服务器的连接数。             |
+| DATABASE()、SCHEMA()                  | 获取当前数据库名。               |
+| USER()、SYSTEM_USER()、SESSION_USER() | 获取当前用户名。                 |
+| CURRENT_USER()、CURRENT_USER          | 获取当前用户名。                 |
+| CHARSET(str)                          | 获取字符串str的字符集。          |
+| COLLATION(str)                        | 获取字符串str的字符排序方法。    |
+| LAST_INSERT_ID()                      | 获取最近生成的AUTO_INCREMENT值。 |
+
+#### 加密函数
+
+| 函数                       | 说明                                                         |
+| -------------------------- | ------------------------------------------------------------ |
+| PASSWORD(str)              | 对字符串str进行加密。经此函数加密后的数据是不可逆的。其经常用于对普通数据进行加密。 |
+| MD5(str)                   | 对字符串str进行MD5加密。经常用于对普通数据进行加密。         |
+| ENCODE(str,pass_str)       | 使用字符串pass_str来加密字符串str。加密后的结果是一个二进制数，必须使用BLOB类型的字段来保存它。 |
+| DECODE(crypt_str,pass_str) | 使用字符串pass_str来为crypt_str解密。                        |
+
+#### 其他函数
+
+MySQL中除了上述内置函数以外，还包含很多函数。例如，数字格式化函数FORMAT(x,n)，IP地址与数字的转换函数INET_ATON(ip)，还有加锁函数GET_LOCT(name,time)、解锁函数RELEASE_LOCK(name)等等。
+
+
+
 ### 12 汇总数据
 
 #### 12.1 聚集函数
@@ -416,16 +480,25 @@ mysql> select cust_id, order_num from orders where Date(order_date) Between '200
 
 所有聚集函数都可以用来执行多个列上的计算。
 
-<pre>mysql> select sum(item_price*quantity) as total from orderitems;
+```mysql
+mysql> select sum(item_price*quantity) as total from orderitems;
 +---------+
 | total   |
 +---------+
 | 1368.34 |
 +---------+
-</pre>
+```
+
+Count()两种：
+
+- 使用`COUNT(*)`对表中行的数目进行计数，不管表列中包含的是空值（NULL）还是非空值。
+- 使用`COUNT(column)`对特定列中具有值的行进行计数，忽略NULL值。
+
+在用于文本数据时，如果数据按相应的列排序，则MAX()返回最后一行，MIN()返回最前面的行。
+
 #### 12.2 聚集不同值 
 
-DISTINCT
+`DISTINCT`
 
 ```mysql
 mysql> select avg(distinct prod_price) as avg_price  from products where vend_id = 1003;
