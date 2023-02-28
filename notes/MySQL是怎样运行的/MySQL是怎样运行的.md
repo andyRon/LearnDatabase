@@ -1,6 +1,8 @@
 《MySQL是怎样运行的》笔记
 ----
 
+作者：小孩子4919
+
 ## 1 初始MySQL
 
 MySQL的服务器程序和客户端程序
@@ -13,7 +15,7 @@ MySQL的服务器程序和客户端程序
 
 ### 启动MySQL服务器程序
 
-`mysqld`不常用，常用`mysqld_safe`：
+`mysqld`不常用，常用`mysqld_safe`，它的优点：
 
 - 间接调用mysqld并持续监控服务器的运行状态。
 - 当服务器进程出现错误，可以帮助重启服务器程序。
@@ -28,9 +30,17 @@ mysql.server stop
 
 `mysqld_multi`可以启动或停止多个服务器进程，也能报告他们的运行状态。
 
-`mysqld_safe`、`mysql.server`、`mysqld_multi`都是基于mysqld的shell脚本。
+`mysqld_safe`、`mysql.server`、`mysqld_multi`都是基于`mysqld`的shell脚本。
 
 ### 启动MySQL客服端程序
+
+```shell
+mysql -h主机名 -u用户们 -p密码
+```
+
+
+
+关闭客服端命令：
 
 ```
 quit
@@ -71,7 +81,7 @@ windows特有的。
 
 如果在启动客服端程序时<u>没有指定主机名，或者指定的主机名为localhost，或者指定了`--protocol=socket`，</u>那么服务器程序和客服端程序就可以通过Unix域套接字通信了。
 
-服务器程序默认监听的Unix域套接字文件是`/tmp/mysql.sock`，修改方式：
+服务器程序默认监听的Unix域**套接字文件**是`/tmp/mysql.sock`，修改方式：
 
 ```shell
 mysqld --socket=/tmp/a.txt
@@ -93,7 +103,9 @@ mysql -hlocalhost -uroot --socket=/tmp/a.txt -p
 
 #### 1.连接管理
 
+每当一个客户端进程连接到服务器进程时，服务器进程都会**创建一个线程专门处理与这个客户端的交互**；断开后线程不会被立即销毁，而是缓存起来，当另一个新的客户端再进行连接时，就会把这个线程分配给该新的客户端。
 
+当然也需要限制可以同时连接到服务器的客服端数量。
 
 #### 2.解析与优化
 
@@ -103,11 +115,15 @@ mysql -hlocalhost -uroot --socket=/tmp/a.txt -p
 
 - 语法解析
 
+从本质上说，这个从指定的文本中提取出需要的信息是一个编译过程，涉及词法解析、语法分析、语义分析等阶段。
+
 - 查询优化
+
+对我们的语句做一些优化，如外连接转换为内连接、表达式简化、子查询转为连接等等，最中结果是生成一个==执行计划==。
 
 #### 3.存储引擎
 
-
+在物理上如何表示记录（逻辑上表是有一行一行的记录组成的），怎么从表中读取数据以及怎么把数据写入具体的物理存储器上，都是存储引擎负责的事情。
 
 ### 常用存储引擎
 
@@ -196,7 +212,7 @@ MySQL程序启动时会在多个路径下寻找配置文件，也可在命令行
 
 - 前3个路径，配置文件可以`.ini`也可以是`.cnf`
 - `%WINDIR`指Windows目录，通常是`C:\WINDOWS`。可以通过`echi %WINDIR%`查看。
-- BASEDIR是指MySQL的安装目录路径。
+- `BASEDIR`是指MySQL的安装目录路径。
 - `%APPDATA%`表示Windows应用程序数据目录，可用`echo %APPDATA%`查看。
 - 最后一个`.mylogin.cnf`有点特殊，它不是纯文本文件，是程序mysql_config_editor创建的加密文件。
 
@@ -206,9 +222,9 @@ MySQL程序启动时会在多个路径下寻找配置文件，也可在命令行
 
 ##### 2.配置文件的内容
 
-配置文件中的启动选项被划分为若干个组，不同选项组给不同程序使用。
+配置文件中的启动选项被划分为若干个组（组名用`[]`扩起来），不同选项组给不同程序使用。
 
-```ini
+```
 [server]
 option1
 option2 = value2
@@ -244,7 +260,7 @@ option2 = value2
 
 ##### 3.特定MySQL版本的专用选项组
 
-```ini
+```
 # 只有对应版本的mysqld才能使用
 [mysqld-5.7]
 ```
@@ -269,17 +285,15 @@ mysqld --defaults-file=/tmp/myconfig.txt
 
 #### 在命令行和配置文件中启动选项的区别
 
-除defaults--extra-file、defaults-file这样的本身指定配置文件路径的，在命令行汇总指定的启动选项都可以放到配置文件中。
+除了`defaults--extra-file`、`defaults-file`这样的本身指定配置文件路径的和一些只能在命令行使用的，其它启动选项都可以放到配置文件中。
 
 命令行的优先级高于配置文件。
 
 ### 2.2 系统变量
 
-**系统变量**：MySQL服务器程序在运行过程中会用到许多影响程序行为的变量。
+**系统变量**：MySQL服务器程序在运行过程中会用到许多影响程序行为的变量。有好几百个。
 
-有好几百个。
-
-可以通过启动服务器时的启动选项配置。
+每个系统变量都有一个默认值，可使用命令行或配置文件在启动服务器是修改。
 
 大多说系统变量的值也可以在程序运行过程中修改，而无须停止并停止并重新启动服务器。
 
@@ -293,14 +307,24 @@ Show Variables [Like 匹配的模式];
 
 ##### 1.通过启动选项设置
 
+```shell
+mysqld --default-storage-engine=MyISAM --max-connections=10
+```
+
+```
+[server]
+default-storage-engine=MyISAM 
+max-connections=10
+```
+
 > **注**：系统变量，各单词之间只能用`_`连接。
 
 ##### 2.运行中设置
 
 系统变量有作用范围之分：
 
-- Global（全局范围）：影响服务器的整体操作。
-- Session（会话范围）：影响某个客服端连接的操作。
+- Global（全局范围）：影响服务器的整体操作。（全局变量）
+- Session（会话范围）：影响某个客服端连接的操作。（会话变量）
 
 服务器程序运行期间通过客服端程序设置系统变量的语法：
 
@@ -320,10 +344,12 @@ Show [Global|Session] Variables [Like 匹配的模式];
 
 > **注：**
 >
-> - 一些系统变量只具有Global作用范围，如max_connections
-> - 一些系统变量只具有Session作用范围，如inser_id
+> - 通过启动选项设置的系统变量的作用范围都是GLOBAL。
 >
-> - 有些系统变量是只读的，如version
+> - 一些系统变量只具有Global作用范围，如max_connections。
+> - 一些系统变量只具有Session作用范围，如inser_id。
+>
+> - 有些系统变量是只读的，如version。
 
 ##### 3.启动选项和系统变量的区别
 
@@ -358,19 +384,25 @@ mysql> show status like 'thread%';
 
 ### 3.1 简介
 
-将字符映射成二进制数据的过程叫作**编码**，将二进制数据映射到字符的过程叫作**解码**。
+#### 字符集简介
 
-抽象出的概念，**字符集**：描述某个字符范围的编码规则。
+字符与二进制数据的映射关系。
 
-直接用字符对应的二进制比较大小的比较规则叫**二进制比较规则**。
+将字符映射成二进制数据的过程叫作**==编码==**，将二进制数据映射到字符的过程叫作**==解码==**。
+
+人们抽象出的概念，**==字符集==**：描述某个字符范围的编码规则。
+
+#### 比较规则简介
+
+直接用字符对应的二进制比较大小的比较规则叫**==二进制比较规则==**，这种规则比较简单。
 
 同一种字符集可以有多种比较规则。
 
 #### 一些重要的字符集
 
-- **ASCII字符集**。128个字符，一个字节编码。
+- **ASCII字符集**。128个字符。（一个字节编码一个字符）
 
-- ISO 8859-1字符集（**Latin1**）。256个字符（在ASCII基础扩充了128个西欧常用字符）。一个字节编码。
+- ISO 8859-1字符集（**Latin1**）。256个字符（在ASCII基础扩充了128个西欧常用字符）。（一个字节）
 
 - **GB2312字符集**。6762个汉字+682个其它。对应ASCII字符的一个字节编码，其它两个字节编码。（**变长编码方式**）
 
@@ -380,17 +412,23 @@ mysql> show status like 'thread%';
 
 - **GBK字符集**。对GB2312的扩充。
 
-- **UTF-8字符集**。几乎收录世界各国使用的字符，而且还在不断扩充。1~4个字节编码。
+- **UTF-8字符集**。几乎收录世界各国使用的字符，而且还在不断扩充。1~4个字节编码一个字符。
 
-  > UTF-8只是Unicode字符集的一中编码方案，其它有UTF-16（2或4字节编码）、UTF-32（4字节编码）。
-
+  > UTF-8只是Unicode字符集的一中**编码方案**，其它有UTF-16（2或4字节编码）、UTF-32（4字节编码）。
+  >
+  > UTF-8采用1~4个字节编码一个字符；
+  >
+  > UTF-16采用2或4个字节编码一个字符；
+  >
+  > UTF-32采用4个字节编码一个字符。
+  
   
 
 ### 3.2 MySQL中支持的字符集和比较规则
 
 #### MySQL中的utf8和utf8mb4
 
-- Utf8mb3（简称utf8）：阉割过的UTF-8字符集，只使用1~3字节。
+- Utf8mb3（简称utf8）：阉割过的UTF-8字符集，只使用1~3字节表示一个字符。
 
   > UTF-8：8-bit Unicode Transformation Format
   >
@@ -402,15 +440,24 @@ mysql> show status like 'thread%';
 
 ```mysql
 -- `Character Set`和`Charset`是同义词
-Show (Character Set|Charset) [Like 匹配的模式];
+Show (Character Set | Charset) [Like 匹配的模式];
+
+SHOW CHARACTER SET LIKE 'utf8%';
+SHOW CHARSET;
 ```
+
+![](images/image-20230226164543802.png)
+
+MySQL中表示字符集的名称时使用小写形式。
+
+大概有41中字符集。
 
 #### 比较规则的查看
 
 ```mysql
 Show Collation [Like 匹配的模式];
 
-mysql> show Collation Like 'utf8\_%';
+show Collation Like 'utf8%';
 +--------------------------+---------+-----+---------+----------+---------+---------------+
 | Collation                | Charset | Id  | Default | Compiled | Sortlen | Pad_attribute |
 +--------------------------+---------+-----+---------+----------+---------+---------------+
@@ -418,36 +465,11 @@ mysql> show Collation Like 'utf8\_%';
 | utf8_croatian_ci         | utf8    | 213 |         | Yes      |       8 | PAD SPACE     |
 | utf8_czech_ci            | utf8    | 202 |         | Yes      |       8 | PAD SPACE     |
 | utf8_danish_ci           | utf8    | 203 |         | Yes      |       8 | PAD SPACE     |
-| utf8_esperanto_ci        | utf8    | 209 |         | Yes      |       8 | PAD SPACE     |
-| utf8_estonian_ci         | utf8    | 198 |         | Yes      |       8 | PAD SPACE     |
-| utf8_general_ci          | utf8    |  33 | Yes     | Yes      |       1 | PAD SPACE     |
-| utf8_general_mysql500_ci | utf8    | 223 |         | Yes      |       1 | PAD SPACE     |
-| utf8_german2_ci          | utf8    | 212 |         | Yes      |       8 | PAD SPACE     |
-| utf8_hungarian_ci        | utf8    | 210 |         | Yes      |       8 | PAD SPACE     |
-| utf8_icelandic_ci        | utf8    | 193 |         | Yes      |       8 | PAD SPACE     |
-| utf8_latvian_ci          | utf8    | 194 |         | Yes      |       8 | PAD SPACE     |
-| utf8_lithuanian_ci       | utf8    | 204 |         | Yes      |       8 | PAD SPACE     |
-| utf8_persian_ci          | utf8    | 208 |         | Yes      |       8 | PAD SPACE     |
-| utf8_polish_ci           | utf8    | 197 |         | Yes      |       8 | PAD SPACE     |
-| utf8_romanian_ci         | utf8    | 195 |         | Yes      |       8 | PAD SPACE     |
-| utf8_roman_ci            | utf8    | 207 |         | Yes      |       8 | PAD SPACE     |
-| utf8_sinhala_ci          | utf8    | 211 |         | Yes      |       8 | PAD SPACE     |
-| utf8_slovak_ci           | utf8    | 205 |         | Yes      |       8 | PAD SPACE     |
-| utf8_slovenian_ci        | utf8    | 196 |         | Yes      |       8 | PAD SPACE     |
-| utf8_spanish2_ci         | utf8    | 206 |         | Yes      |       8 | PAD SPACE     |
-| utf8_spanish_ci          | utf8    | 199 |         | Yes      |       8 | PAD SPACE     |
-| utf8_swedish_ci          | utf8    | 200 |         | Yes      |       8 | PAD SPACE     |
-| utf8_tolower_ci          | utf8    |  76 |         | Yes      |       1 | PAD SPACE     |
-| utf8_turkish_ci          | utf8    | 201 |         | Yes      |       8 | PAD SPACE     |
-| utf8_unicode_520_ci      | utf8    | 214 |         | Yes      |       8 | PAD SPACE     |
-| utf8_unicode_ci          | utf8    | 192 |         | Yes      |       8 | PAD SPACE     |
-| utf8_vietnamese_ci       | utf8    | 215 |         | Yes      |       8 | PAD SPACE     |
-+--------------------------+---------+-----+---------+----------+---------+---------------+
-28 rows in set (0.01 sec)
+...
 ```
 
-- 比较规则的名称以其关联的字符集名称开头
-- 中间紧跟着该比较规则所应用的语言。如，utf8_polish_ci表示波兰语的比较规则...，utf8_general_ci是通用的比较规则。
+- 比较规则的名称以其关联的字符集名称开头。
+- 中间紧跟着该**比较规则所应用的语言**。如，utf8_polish_ci表示波兰语的比较规则...，utf8_general_ci是通用的比较规则。
 - 名称后缀表示该比较规则是否区分语言中的重音、大小写等。
 
 ![](images/image-20220404112547039.png)
@@ -458,7 +480,12 @@ mysql> show Collation Like 'utf8\_%';
 
 ##### 1.服务器级别
 
-服务器级别的字符集和比较规则的系统变量：`character_set_server`, `collation_server`
+服务器级别的字符集和比较规则的系统变量：`character_set_server`, `collation_server`。
+
+```mysql
+SHOW VARIABLES LIKE 'character_set_server';
+SHOW VARIABLES LIKE 'collation_server';
+```
 
 ##### 2.数据库级别
 
@@ -480,9 +507,16 @@ Character Set gb2312
 Collate gb2312_chinese_ci;
 ```
 
+对应的系统变量：`character_set_database`, `collation_database`（不能通过这两个变量来修改数据库的字符集和比较规则）。
 
+查看当前数据库的字符集和比较规则：
 
-对应的系统变量：`character_set_database`, `collation_database`
+```mysql
+SHOW VARIABLES LIKE 'character_set_database';
+SHOW VARIABLES LIKE 'collation_database';
+```
+
+> 创建数据库时不指定字符集和比较规则，就使用服务器级别的。
 
 ##### 3.表级别
 
@@ -504,11 +538,11 @@ Create Table t (
 ) character Set utf8 collate utf8_general_ci;
 ```
 
-
+> 同样创建表示没指定，就使用数据库级别的。
 
 ##### 4.列级别
 
-对于存储字符串的列，同一个表中不同的列也可以有不同的字符集和比较规则。
+对于存储字符串的列，**同一个表中不同的列也可以有不同的字符集和比较规则**。
 
 ```mysql
 Create Table 表名(
@@ -518,6 +552,8 @@ Create Table 表名(
 
 Alter Table 表名 Modify 列名 字符串类型 [Character set 字符集名称] [Collate 比较规则名称];
 ```
+
+> 对于某个列来说，如果在创建和修改表的语句中没有指明其字符集和比较规则，则使用表的。
 
 ##### 5.仅修改字符集或仅修改比较规则
 
@@ -534,7 +570,7 @@ Alter Table 表名 Modify 列名 字符串类型 [Character set 字符集名称]
 
 ##### 1.编码和解码使用的字符集不一致
 
-> `我`在UTF-8字符集编码下的字节序列是0xE68891。如果程序A把这个字节序列发送到程序B，程序B使用不同的字符集解码（假设使用GBK），过程如下：（可通过在线工具 [汉字字符集编码查询](https://www.qqxiuzi.cn/bianma/zifuji.php) 测试）
+> `我`在UTF-8字符集编码下的字节序列是`0xE68891`。如果程序A把这个字节序列发送到程序B，程序B使用不同的字符集解码（假设使用GBK），过程如下：（可通过在线工具 [汉字字符集编码查询](https://www.qqxiuzi.cn/bianma/zifuji.php) 测试）
 >
 > a. 首先看第一个字节0xE6，大于0x7F（十进制127），说明待读取字符是两字节编码。继续读一字节后得到 OxE688，然后从 GBK 编码表中查找字节为 0xE688 对应的字符，发现是字符`鎴`。
 > b. 继续读一个字节 0x91，它的值也大于 0x7F，试图再读一个字节时发现后边没有了，所以这是半个字符。
@@ -542,21 +578,55 @@ Alter Table 表名 Modify 列名 字符串类型 [Character set 字符集名称]
 
 ##### 2.字符集转换
 
-如果接受`0xE68891`这个字节序列的程序按照UTF-8字符集解码（得到二进制序列为`111001101000100010010001`）；然后再按照GBK字符集进行编码，编码后的字节序列为0xCED2。这个过程就叫作**字符集转换**。
+如果接受`0xE68891`这个字节序列的程序按照UTF-8字符集解码（得到二进制序列为`111001101000100010010001`）；然后再按照GBK字符集进行编码，编码后的字节序列为0xCED2。这个过程就叫作**==字符集转换==**。
 
-##### 3.MySQL中的字符集转换过程
+##### 3.MySQL中的字符集转换过程🔖
+
+从机器的角度看，客户端发送的请求以及服务器返回的响应本质上就是一个**字节序列**。
+
+在这个“客户端发送请求，服务器返回响应”的过程中，其实经历了**多次的字符集转换**：
+
+###### 客户端发送请求
+
+一般，客户端编码请求字符串时使用的字符集与操作系统当前的字符集一致。
+
+- 类UNIX系统时
+
+系统当前使用的字符集，由三个环境变量决定：`LC_ALL`，`LC_CTYPE`，`LANG`（优先级渐渐降低）。
+
+- Windows
+
+
+
+###### 服务器接受请求
+
+服务器将客户端请求的字符序列看作是使用系统变量`character_set_client`代表的字符集进行编码的字节序列（每个客户端与服务器建立连接后，服务器都会为其维护一个单独的SESSION级别的`character_set_client`变量）。
+
+
+
+###### 服务器处理请求
+
+
+
+###### 服务器生成响应
 
 ![](images/image-20220405163546687.png)
 
 这三个系统变量作用范围都是Session级别。
 
+
+
 ![](images/image-20220405163859124.png)
 
-🔖
+> 如果MySQL不支持操作系统当前使用的字符集，则会将客户端默认的字符集设置为MySQL的默认字符集（5.7前是latin1,8.0之后改为utf8mb4）。
+
+###### 客户端接收到响应
+
+
 
 #### 比较规则的应用
 
-比较规则通常用来比较字符串的大小以及对某些字符进行排序，所以也称为**排序规则**。
+比较规则通常用来==比较字符串的大小以及对某些字符进行排序==，所以也称为**排序规则**。
 
 ```mysql
 Insert Into t(col) Values('a'), ('b'), ('A'), ('B'), ('我');
@@ -601,13 +671,19 @@ mysql> Select * From t Order By col;
 
 ## 4 从一条记录说起——InnoDB「记录」存储结构
 
-### InnoDB页简介
+> 数据库建立： `xiaohaizi` utf8mb4  utf8mb4_bin
 
-InnoDB以**页**作为磁盘和内存之间交互的基本单位。页的大小一般为16KB（16*1024=16384）。对应系统变量是`innodb_page_size`，只能在第一次<u>初始化MySQL数据目录</u>时指定，服务器运行时不能更改。
 
-### InnoDB行格式
 
-4中**==行格式==**（也叫作**==记录格式==**）：Compact、Redundant、Dynamic、Compressed。
+### 4.2 InnoDB页简介
+
+处理数据的过程发生在内存中，如果是处理写入或修改请求，还需要把内存中的内容刷新到磁盘上。
+
+InnoDB以**==页==**作为磁盘和内存之间交互的基本单位。页的大小一般为16KB（16*1024=16384）。对应系统变量是`innodb_page_size`，只能在第一次<u>初始化MySQL数据目录</u>时指定，服务器运行时不能更改。
+
+### 4.3 InnoDB行格式
+
+平常以记录为单位向表中插入数据，4种**==行格式==**（也叫作**==记录格式==**）：Compact、Redundant、Dynamic、Compressed。
 
 #### 指定行格式的语法
 
@@ -645,15 +721,15 @@ mysql> select * from record_format_demo;
 
 一条完整的记录分为两大部分：
 
-##### 1.记录的额外信息
+##### 1.==记录的额外信息==
 
 ###### a 变长字段长度列表
 
-MySQL支持一些变长的数据类型：Varchar(M)、Varbinary(M)、各种Text类型、各种Blob类型。
+MySQL支持一些变长的数据类型：<u>Varchar(M)、Varbinary(M)、各种Text类型、各种Blob类型</u>。
 
 变长字段占用的存储空间分为两个部分：**真正的数据内容；该数据占用的字节数**。
 
-各变长字段的真实数据占用的字节数按照列的顺序**==逆序存放==**（如下面的c4、c2、c1）。
+在COMPACT行格式中，所有变长字段的真实数据占用的字节数都存放在记录的开头位置，从而形成一个==变长字段长度列表==，各变长字段的真实数据占用的字节数按照列的顺序**==逆序存放==**（如下面的c4、c2、c1）。
 
 表record_format_demo的c1、c2、c4字段都是varchar(10)，这3个列的值<u>占用的存储空间字节数</u>保存在记录开头处。
 
@@ -679,13 +755,15 @@ MySQL支持一些变长的数据类型：Varchar(M)、Varbinary(M)、各种Text�
 
 总结：<u>如果该变长字段允许存储的最大字节数（M * W）超过255字节，并且真实数据占用的字节数(L）超过 127字节，则使用2字节来表示真实数据占用的字节数，否则使用 1字节。</u>
 
-**变长字段长度列表中只存储值为非NULL 的列的内容长度。**
+**变长字段长度列表中只存储值为非NULL的列的内容长度。**
 
 ![](images/image-20220406163610261.png)
 
+> 如果表中所有的列都不是变长的数据类型或所有列的值都是NULL，那么就不需要变长字段长度列表。
+
 ###### b NULL值列表
 
-Compact行格式把一条记录中值为NULL的行统一管理起来（节省空间），存储在NULL值列表中。
+Compact行格式把一条记录中值为NULL的列统一管理起来（节省空间），存储在NULL值列表中。
 
 处理过程：
 
@@ -723,7 +801,7 @@ record_format_demo表中的两条记录的记录头信息：
 
 ![](images/image-20220406165127316.png)
 
-##### 2.记录的真实数据
+##### 2.==记录的真实数据==
 
 MySQL会为每个记录默认地添加一些**隐藏列**：
 
@@ -732,10 +810,14 @@ MySQL会为每个记录默认地添加一些**隐藏列**：
 > InoDB 表的**主键生成策略**：
 >
 > - 优先使用用户自定义的主键作为主键；
-> - 如果用户没有定义主键，则选取一个不允许存储 NULL 值的Unique 键作为主键；
-> - 如果表中连不允许存储NULL 值的 Unique 键都没有定义，则InnoDB 会为表默认添加个名为row_id的隐藏列作为主键。
+> - 如果用户没有定义主键，则选取一个不允许存储 NULL 值的Unique键作为主键；
+> - 如果表中连不允许存储NULL 值的 Unique 键都没有定义，则InnoDB 会为表默认添加个名为row_id的隐藏列作为主键。（否则默认是不会有row_id的）
+
+加上记录的真实数据的两条记录：
 
 ![](images/image-20220406165801497.png)
+
+第一条记录c3列式CHAR(10)类型（固定），实际存储的是只占2个字节的字符串`'cc'`（`0x6363`），后面8个字节用空格（`0x6363`）填充。
 
 ##### 3.Char(M)列的存储格式
 
