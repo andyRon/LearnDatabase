@@ -64,13 +64,13 @@ NoSQL就是用来处理以上情况！
 
 ### 什么是NoSQL
 
-NoSQL = Not Only SQL（不仅仅是SQL）
+NoSQL = ==Not Only SQL（不仅仅是SQL）==
 
 泛指非关系型数据库
 
 关系型数据库：表格，行，列
 
-很多的数据类型用户的个人信息、社交网络、地理位置。这些数据类型的存储不需要一个固定的格式！不需要多余的操作就可以横向扩展！Map<Strign, Object>使用键值对来控制！
+很多的数据类型**用户的个人信息、社交网络、地理位置**。这些数据类型的存储不需要一个固定的格式！不需要多余的操作就可以横向扩展！Map<Strign, Object>使用键值对来控制！
 
 #### NoSQL特点
 
@@ -78,7 +78,7 @@ NoSQL = Not Only SQL（不仅仅是SQL）
 
 1. 方便扩展（数据之间没有关系，很好扩展！）
 
-2. 大数量高性能（Redis一秒写8万次，读取11万，NoSQL的缓存记录级，是一种细粒度的缓存，性能会比较高！）
+2. 大数量高性能（Redis一秒写8万次，读取11万，NoSQL的缓存记录级，是一种<u>细粒度的缓存</u>，性能会比较高！）
 
 3. 数据类型是多样性的！（不需要事先设计数据库！随取随用Q如果是数据量十分大的表，很多人就无法设计了！）
 
@@ -176,6 +176,8 @@ NoSQL = Not Only SQL（不仅仅是SQL）
 - 数据源繁多，经常重构
 - 数据要改造，
 
+统一数据服务层(Unified Data Service Layer, UDSL)
+
 ![](../../images/image-20211014105644603.png)
 
 
@@ -194,10 +196,14 @@ NoSQL = Not Only SQL（不仅仅是SQL）
 
 #### 文档型数据库（bson格式 和json一样）：
 
+> BSON（/ˈbiːsən/）是一种计算机数据交换格式，主要被用作MongoDB数据库中的数据存储和网络传输格式。它是一种二进制表示形式，能用来表示简单数据结构、关联数组（MongoDB中称为“对象”或“文档”）以及MongoDB中的各种数据类型。
+>
+> BSON之名缘于JSON，含义为Binary JSON（二进制JSON）。
+
 - **MongoDB**（一般必须要掌握）
   - MongoDB是一个基于分布式文件存储的数据库，C++编写，主要用来处理大量的文档！
   - MongoDB介于关系型数据库和非关系数据库中中间的产品！它是非关系数据库中功能最丰富的，最想关系型数据库的
-- ConchDB
+- CouchDB
 
 #### 列存储数据库（mysql等都是行存储形式）
 
@@ -352,6 +358,7 @@ $ ps -ef | grep redis
 `redis-benchmark`  
 
 ```
+// 使用100个并发连接、100000个请求检测端口为6379的Redis服务器性能
 redis-benchmark -h localhost -p 6379 -c 100 -n 100000
 ```
 
@@ -386,7 +393,7 @@ OK
 
 > Redis 6之前是单线程的
 
-Redis是很快的，Redis是基于内存操作，CPU不是Redis性能瓶颈，Redis的瓶颈是根据机器的**内存和网络带宽**，既然可以使用单线程来实现，就使用单线程了。
+Redis是很快的，Redis是基于内存操作，CPU不是Redis性能瓶颈，Redis的瓶颈是根据机器的**==内存和网络带宽==**，既然可以使用单线程来实现，就使用单线程了。
 
 **Redis为什么单线程还这么快？**
 
@@ -411,6 +418,27 @@ CPU > 内存 > 硬盘的速度要有所了解！
 `type name`： 查看类型
 
 `clear`
+
+
+
+```shell
+KEYS pattern
+KEYS *
+KEYS str*
+KEYS h?llo
+
+DBSIZE  # 获取键总数（内部变量，不遍历）
+
+Exits key [key ...]   # 查询键是否存在
+
+Del key [key ...]
+
+Type key
+
+Rename key newKey
+```
+
+
 
 ### String
 
@@ -480,7 +508,7 @@ rpop
 lindex 
 llen
 lrem list 1 value # 移除list集合中指定个数的value
-ltrim
+ltrim	key start stop			# 让列表只保留指定区间内的元素，不在指定区间之内的元素都将被删除。（第一个元素从0开始）
 rpoplpush
 lset 		# 将列表中指定下标的值替换为另外一值，更新操作
 linsert	# 将某个具体的value插入到列中某个元素的前面或者后面
@@ -665,7 +693,7 @@ OK
 
 
 
-### zset（有序集合）
+### zset（有序集合，也不重复）
 
 在set的基础上，增加了一个用户排序的值
 
@@ -767,7 +795,7 @@ geopos china:city beijing
 
 
 
-3. `geodist`  亮点之间的距离
+3. `geodist`  亮点之间的距离（单位：米）
 
 ```bash
 127.0.0.1:6379[2]> geodist china:city shanghai beijing
@@ -830,7 +858,7 @@ georadius key longitude latitude radius
 2) "wqj6zky6bn0"
 ```
 
-GEO底层的实现原理就是zset，可以使用zset的命令来操作geo！
+🔖GEO底层的实现原理就是zset，可以使用zset的命令来操作geo！
 
 ```bash
 127.0.0.1:6379[2]> zrange china:city 0 -1
@@ -958,7 +986,7 @@ bitcount key [start end]
 
 ## 事务
 
-Redis事务本质：一组命令的集合！一个事务中的所有命令都会被序列化，在事务执行过程的中，会按照顺序执行！
+Redis事务本质：==一组命令的集合==！一个事务中的所有命令都会被序列化，在事务执行过程的中，会按照顺序执行！
 
 一次性、顺序性、排他性！执行一系列的命令！
 
@@ -970,7 +998,7 @@ Redis事务本质：一组命令的集合！一个事务中的所有命令都会
 
 所有的命令在事务中，并没有直接执行！只有发起执行命令的时候才会执行！Exec
 
-**Redis单条命令保存原子性的，但redis事务不保证原子性！**
+**Redis==单条命令保存原子性的==，但redis==事务不保证原子性==！**
 
 redis事务的三个阶段：
 
@@ -1076,7 +1104,7 @@ QUEUED
 
 
 
-### 监控  watch （可实现乐观锁）
+### 监控  watch （可实现乐观锁）🔖
 
 
 
@@ -1190,7 +1218,7 @@ SpringBoot操作数据：spring-data，jpa、jdbc、mongodb、redis等
 
 jedis：采用直连，多个线程操作的话，是不安全的，如果想要避免不安全，使用jedis pool连接池！（像BIO模式）
 
-lettuce：采用netty，实例可以在多个线程中进行共享，不存在线程不安全的情况！可以减少线程数据！（像NIO模式）
+==lettuce==：采用==netty==，实例可以在多个线程中进行共享，不存在线程不安全的情况！可以减少线程数据！（像NIO模式）
 
 
 
@@ -1502,11 +1530,13 @@ appendfsync everysec  # 每秒执行一次sync，可能会丢失这1s的数据
 
 ### RDB(Redis DataBase)
 
-<img src="../../images/image-20211019201815586.png" alt="image-20211019201815586"  />
+![](images/image-20211019201815586.png)
+
+
 
 在指定的时间间隔内将内存中的数据集快照写入磁盘，也就是行话讲的**Snapshot快照**，它恢复时是将快照文件直接读到内存里。 
 
-Redis会单独创建（fork）一个子进程来进行持久化，会先将数据写入到一个临时文件中，待持久化过程都结束了，再用这个临时文件替换上次持久化好的文件。整个过程中，主进程是不进行任何I0操作的。这就确保了极高的性能。如果需要进行大规模数据的恢复，且**对于数据恢复的完整性不是非常敏感**，那RDB方式要比AOF方式更加的高效。
+Redis会单独创建（fork）一个子进程来进行持久化，会先<u>将数据写入到一个临时文件中，待持久化过程都结束了，再用这个临时文件替换上次持久化好的文件</u>。整个过程中，主进程是不进行任何I0操作的。这就确保了极高的性能。如果需要进行大规模数据的恢复，且**对于数据恢复的完整性不是非常敏感**，那RDB方式要比AOF方式更加的高效。
 
 RDB的缺点是最后一次持久化后的数据可能丢失。我们默认的就是RDB，一般情况下不需要修改这个配置！
 
@@ -1530,6 +1560,11 @@ rdb保存的文件是 `dump.rdb` （在生成环境有时候会备份这个文�
 2) "/Users/andyron/myfield/tmp"
 ```
 
+```shell
+Config get *
+Config get loglevel
+```
+
 优点：
 
 1. 适合大规模的数据恢复
@@ -1546,9 +1581,11 @@ rdb保存的文件是 `dump.rdb` （在生成环境有时候会备份这个文�
 
 将所有命令都记录下来（类似history），恢复的时候就把这个文件全部在执行一下。
 
-<img src="../../images/image-20211019204153754.png" alt="image-20211019204153754"  />
+![](images/image-20211019204153754.png)
 
-以日志的形式来记录每个写操作，将Redis执行过的所有指令记录下来（读操作不记录），只许追加文件但不可以改写文件，redis启动之初会读取该文件重新构建数据，换言之，redis重启的话就根据日志文件的内容将写指令从前到后执行一次以完成数据的恢复工作。
+
+
+以日志的形式来记录每个写操作，将Redis执行过的==所有指令记录下来（读操作不记录）==，==只许追加文件==但不可以改写文件，redis启动之初会读取该文件重新构建数据，换言之，redis重启的话就根据日志文件的内容将写指令从前到后执行一次以完成数据的恢复工作。
 
 Aof保存的是`appendonly.aof`文件
 
@@ -1675,23 +1712,498 @@ Redis发布订阅（pub/sub）是一种**消息通信模式**。发送者（pub�
 
 Redis客户端可以订阅任意数量的频道
 
-三个角色：消息发布者、频道、消息订阅者
+三个角色：==消息发布者、频道、消息订阅者==。
+
+订阅/发布消息突、图：
 
 ![](../../images/image-20211019205347558.png)
 
+### 发布订阅命令
+
+1. `PSUBSCRIBE pattern [pattern ...]`  订阅一个或多个符合给定模式的频道。
+2. `PUBSUB subcommand [argument [argument ...]]` 查看订阅与发布系统状态。
+3. `PUBLISH channel message`  将信息发送到指定的频道。
+4. `PUNSUBSCRIBE [pattern [pattern ...]]`  退订所有给定模式的频道。
+5. `SUBSCRIBE channel [channel ...]`  订阅给定的一个或多个频道的信息。
+6. `UNSUBSCRIBE [channel [channel ...]]`  指退订给定的频道。
 
 
-![](../../images/image-20211019214845042.png)
+
+### 测试
+
+订阅建立了一个频道:
+
+```shell
+127.0.0.1:6379> SUBSCRIBE kuangshenshuo
+Reading messages... (press Ctrl-C to quit)
+1) "subscribe"
+2) "kuangshenshuo"
+3) (integer) 1
+# 等待读取推送的消息
+```
+
+在新的redis-cli，发布者发布消息:
+
+```shell
+127.0.0.1:6379> PUBLISH kuangshenshuo "hello, world"
+(integer) 1
+127.0.0.1:6379>
+```
+
+订阅的此频道的订阅者会接受到消息：
+
+```shell
+127.0.0.1:6379> SUBSCRIBE kuangshenshuo
+Reading messages... (press Ctrl-C to quit)
+1) "subscribe"
+2) "kuangshenshuo"
+3) (integer) 1
+1) "message"
+2) "kuangshenshuo"
+3) "hello, world"
+```
 
 
 
-🔖p30
+### 原理
+
+Redis是使用C实现的，通过分析 Redis 源码里的 pubsub.c 文件，了解发布和订阅机制的底层实现，籍此加深对 Redis 的理解。
+
+Redis通过 PUBLISH、SUBSCRIBE 和 PSUBSCRIBE 等命令实现发布和订阅功能。
+
+通过 SUBSCRIBE 命令订阅某频道后，redis-server 里维护了一个字典，字典的键就是一个个频道！，而字典的值则是一个**链表**，链表中保存了所有订阅这个频道的客户端。SUBSCRIBE 命令的关键，就是将客户端添加到给定 channel 的订阅链表中。
+
+通过 PUBLISH 命令向订阅者发送消息，redis-server 会使用给定的频道作为键，在它所维护的channel 宇典中查找记录了订阅这个频道的所有客户端的链表，遍历这个链表，将消息发布给所有订阅者。
+
+Pub/Sub 从字面上理解就是发布(Publish ）与订阅（Subscribe），在Redis中，你可以设定对某—个key 值进行消息发布及消息订阅，当一个key值上进行了消息发布后，所有订阅它的客户端都会收到相应的消息。这一功能最明显的用法就是用作实时消息系统，比如普通的即时聊天，群聊等功能。
+
+
+
+**使用场景**：
+
+- 实时消息系统
+- 实时聊天！（频道当做聊天室，将信息回显给所有人即可！）
+- 订阅
+
+复杂的场景就会使用专业的消息中间体MQ。
+
+
 
 ## Redis主从复制
 
-高可用
+主从复制，是指将一台Redis服务器的数据 ，复制到其他的Redis服务器。前者称为==主节点==(master/leader)，后者称为==从节点==(slave/follower);==数据的复制是单向的，只能由主节点到从节点==。Master以写为主，Slave 以读为主。
 
-哨兵模式
+<u>默认情况下，每台Redis服务器都是主节点</u>；且一个主节点可以有多个从节点(或没有从节点），但一个从节点只能有一个主节点。
 
-## Redis缓存穿透和雪崩
+主从复制的作用主要包括：
 
+1. 数据冗余：主从复制实现了数据的热备份，是持久化之外的一种数据冗余方式。
+
+2. ﻿﻿故障恢复：当主节点出现问题时，可以由从节点提供服务，实现快速的故障恢复；实际上是一种服务的冗余。
+
+3. ﻿﻿负载均衡：在主从复制的基础上，配合读写分离，可以由主节点提供写服务，由从节点提供读服务(即写Redis数据时应用连接主节点，读Redis数据时应用连接从节点），分担服务器负载；龙其是在写少读多的场景下，通过多个从节点分担读负载，可以大大提高Redis 服务器的并发量。
+
+4. 高可用（集群）基石：除了上述作用以外，主从复制还是哨兵和集群能够实施的基础，因此说主从复制是Redis高可用的基础。
+
+
+
+一般来说，要将Redis运用于工程项目中 ，只使用一台Redis是万万不能的（最少一主二从），原因如下：
+
+1. ﻿﻿从结构上，单个Redis服务器会发生单点故障，并且一台服务器需要处理所有的请求负载，压力较大；
+
+2. 从容量上，单个Redis服务器内存容量有限，就算一台Redis服务器内存容量为256G，也不能将所有内存用作Redis存储内存，一般来说，单台Redis最大使用内存不应该超过==20G==。
+
+电商网站上的商品，一般都是一次上传，无数次浏览的，说专业点也就是"多读少写”。
+
+![](images/image-20230307171356235.png)
+
+### 环境配置
+
+只配置从库，不用配置主库。
+
+```shell
+127.0.0.1:6379> INFO replication  # 查看当前库的信息
+# Replication
+role:master				# 角色默认是master
+connected_slaves:0  # 没有从机
+master_failover_state:no-failover
+master_replid:66d796ee1cb6bce624bfbf4af0606a4ae8bc063a
+master_replid2:0000000000000000000000000000000000000000
+master_repl_offset:0
+second_repl_offset:-1
+repl_backlog_active:0
+repl_backlog_size:1048576
+repl_backlog_first_byte_offset:0
+repl_backlog_histlen:0
+```
+
+复制3个配置文件，然后修改对应的信息：
+
+1. 端口
+2. pid名字
+3. log文件名字
+4. dump.rdb 名字
+
+```
+port 6380
+pidfile /var/run/redis_6380.pid
+logfile "6380.log"
+dbfilename dump6380.rdb
+```
+
+
+
+启动三个redis服务
+
+```shell
+ps aux | grep redis-server
+andyron          19608   0.4  0.0 409625904   3536   ??  Ss    6:00下午   0:01.29 redis-server 127.0.0.1:6379
+andyron          19641   0.4  0.0 409485616   3792   ??  Ss    6:04下午   0:00.17 redis-server 127.0.0.1:6381
+andyron          19636   0.3  0.0 409485616   3808   ??  Ss    6:04下午   0:00.18 redis-server 127.0.0.1:6380
+andyron          19668   0.0  0.0 408626880   1344 s002  S+    6:04下午   0:00.00 grep --color=auto --exclude-dir=.bzr --exclude-dir=CVS --exclude-dir=.git --exclude-dir=.hg --exclude-dir=.svn --exclude-dir=.idea --exclude-dir=.tox redis-server
+```
+
+
+
+### 一主二从
+
+认老大！一主（80）二从（79,81）
+
+```shell
+127.0.0.1:6379> SLAVEOF 127.0.0.1 6380
+OK
+127.0.0.1:6379> INFO replication
+# Replication
+role:slave			# 从机
+master_host:127.0.0.1  # 主机信息
+master_port:6380
+master_link_status:down
+master_last_io_seconds_ago:-1
+master_sync_in_progress:0
+slave_read_repl_offset:0
+slave_repl_offset:0
+master_link_down_since_seconds:-1
+slave_priority:100
+slave_read_only:1
+replica_announced:1
+connected_slaves:0
+master_failover_state:no-failover
+master_replid:e4c02411a40ad33572ddb7368da699b0350c8b5a
+master_replid2:0000000000000000000000000000000000000000
+master_repl_offset:0
+second_repl_offset:-1
+repl_backlog_active:0
+repl_backlog_size:1048576
+repl_backlog_first_byt
+```
+
+
+
+```shell
+127.0.0.1:6380> INFO replication
+# Replication
+role:master
+connected_slaves:2
+slave0:ip=127.0.0.1,port=6379,state=online,offset=224,lag=0
+slave1:ip=127.0.0.1,port=6381,state=wait_bgsave,offset=0,lag=0
+master_failover_state:no-failover
+master_replid:4ef210184c7cd05c76c3d60e1d008d3de9a14f95
+master_replid2:0000000000000000000000000000000000000000
+master_repl_offset:224
+second_repl_offset:-1
+repl_backlog_active:1
+repl_backlog_size:1048576
+repl_backlog_first_byte_offset:1
+repl_backlog_histlen:224
+```
+
+
+
+真实的主从配置应该在配置文件中配置，就是在从的配置中配置下面字段：
+
+```
+replicaof <masterip> <masterport>   # 主的ip和端口
+
+masterauth <master-password>
+# masteruser <username>
+```
+
+> 主机可以写，从机不能写只能读。主机中的所有信息和数据，都会自动被从机保持。
+
+```shell
+127.0.0.1:6380> set k1 v111
+OK
+```
+
+```shell
+127.0.0.1:6379> get k1
+"v111"
+127.0.0.1:6379> set k2 v2
+(error) READONLY You can't write against a read only replica.
+```
+
+测试：
+
+- 主机宕机了，从机依旧是从机，能获得之前主机写入的数据；如果主机重新启动，主从关系恢复，从机依旧从主机获得写入的数据。
+- 如果是使用命令配置主从，从机重启后，就会变回的主机；只要重新设置为从机，立马就会从主机中获取值。
+
+> 复制原理
+
+Slave启动成功连接到master后会发送一个sync同步命令。
+
+Master 接到命令，启动后台的存盘进程，同时收集所有接收到的用于修改数据集命令，在后台进程执行完毕之后，==master将传送整个数据文件到slave，并完成一次完全同步==。
+
+==全量复制==：而slave服务在接收到数据库文件数据后，将其存盘并加载到内存中。
+
+==增量复制==：Master继续将新的所有收集到的修改命令依次传给slave，完成同步。
+
+但是只要是重新连接master，一次完全同步（全量复制）将被自动执行！
+
+> 另外一种配置方式
+
+上一个M链接到下一个S：
+
+![](images/image-20230307184240988.png)
+
+
+
+如果主机断了可以，使用`SLAVEOF no one`让自己成为主机：
+
+```shell
+127.0.0.1:6381> SLAVEOF no one
+OK
+127.0.0.1:6381> INFO replication
+# Replication
+role:master
+connected_slaves:0
+master_failover_state:no-failover
+master_replid:df6b8d4374570cebda26316b06667f6f1171433b
+master_replid2:649a6c76ac9b2fe846cb2cc658780e945fac83de
+master_repl_offset:3053
+second_repl_offset:3054
+repl_backlog_active:1
+repl_backlog_size:1048576
+repl_backlog_first_byte_offset:2970
+repl_backlog_histlen:84
+```
+
+其它节点就可以**手动**连接到最新的主节点。
+
+
+
+### 哨兵模式（自动选举老大）
+
+主从切换技术的方法是：当主服务器宕机后 ，需要手动把一台从服务器切换为主服务器，这就需要人工干预，费事费力，还会造成一段时间内服务不可用。这不是一种推荐的方式，更多时候，我们优先考虑哨兵模式。
+
+Redis从2.8开始正式提供了==Sentinel (哨兵）==架构来解決这个问题。
+
+谋朝篡位的自动版，能够后台监控主机是否故障，如果故障了根据投票数**自动将从库转换为主库**。
+
+哨兵模式是一种特殊的模式，首先Redis提供了哨兵的命令，哨兵是一个独立的进程，作为进程，它会独立运行。其原理是**哨兵通过发送命令，等待Redis服务器响应，从而监控运行的多个Redis实例**。
+
+![](images/image-20230307185751464.png)
+
+这里的哨兵有两个作用
+
+- ﻿通过发送命令，让Redis服务器返回监控其运行状态，包括主服务器和从服务器。
+- ﻿当哨兵监测到master宕机，会自动将slave切换成master，然后通过发布订阅模式通知其他的从服务器，修改配置文件，让它们切换主机。
+
+然而一个哨兵进程对Redis服务器进行监控，可能会出现问题，为此，我们可以使用多个哨兵进行监控。各个哨兵之间还会进行监控，这样就形成了==多哨兵模式==。
+
+![](images/image-20230307185956302.png)
+
+假设主服务器宕机，哨兵1先检测到这个结果，系统并不会马上进行failover过程，仅仅是哨兵1主观的认为主服务器不可用，这个现象成为==主观下线==。当后面的哨兵也检测到主服务器不可用，并且数量达到一定值时，那么哨兵之问就会进行一次投票，投票的结果由一个哨乓发起，进行failover(故障转移)燥作。切换成功后，就会通过发布订阅模式，让各个哨兵把自己监控的从服务器实现切换主机，这个过程称为==客观下线==。
+
+> 测试
+
+目前是一主二从
+
+1. 配置哨兵配置文件`sentinel.conf`：
+
+```
+sentinel monitor myredis 127.0.0.1 6379 1 
+```
+
+myredis表示**被监控的名称**；
+
+最后的1表示，（当主机挂了）让从机投票选择谁接替成为主机。
+
+2. 启动哨兵
+
+```shell
+$ redis-sentinel myconfig/sentinel.conf
+20139:X 07 Mar 2023 19:13:31.540 # oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+20139:X 07 Mar 2023 19:13:31.540 # Redis version=7.0.7, bits=64, commit=00000000, modified=0, pid=20139, just started
+20139:X 07 Mar 2023 19:13:31.540 # Configuration loaded
+20139:X 07 Mar 2023 19:13:31.541 * Increased maximum number of open files to 10032 (it was originally set to 256).
+20139:X 07 Mar 2023 19:13:31.541 * monotonic clock: POSIX clock_gettime
+                _._
+           _.-``__ ''-._
+      _.-``    `.  `_.  ''-._           Redis 7.0.7 (00000000/0) 64 bit
+  .-`` .-```.  ```\/    _.,_ ''-._
+ (    '      ,       .-`  | `,    )     Running in sentinel mode
+ |`-._`-...-` __...-.``-._|'` _.-'|     Port: 26379
+ |    `-._   `._    /     _.-'    |     PID: 20139
+  `-._    `-._  `-./  _.-'    _.-'
+ |`-._`-._    `-.__.-'    _.-'_.-'|
+ |    `-._`-._        _.-'_.-'    |           https://redis.io
+  `-._    `-._`-.__.-'_.-'    _.-'
+ |`-._`-._    `-.__.-'    _.-'_.-'|
+ |    `-._`-._        _.-'_.-'    |
+  `-._    `-._`-.__.-'_.-'    _.-'
+      `-._    `-.__.-'    _.-'
+          `-._        _.-'
+              `-.__.-'
+
+20139:X 07 Mar 2023 19:13:31.541 # WARNING: The TCP backlog setting of 511 cannot be enforced because kern.ipc.somaxconn is set to the lower value of 128.
+20139:X 07 Mar 2023 19:13:31.546 * Sentinel new configuration saved on disk
+20139:X 07 Mar 2023 19:13:31.547 # Sentinel ID is 83619a787c8cb09c420d6c72bcc869b315f86807
+20139:X 07 Mar 2023 19:13:31.547 # +monitor master myredis 127.0.0.1 6379 quorum 1
+20139:X 07 Mar 2023 19:13:31.548 * +slave slave 127.0.0.1:6380 127.0.0.1 6380 @ myredis 127.0.0.1 6379
+20139:X 07 Mar 2023 19:13:31.552 * Sentinel new configuration saved on disk
+20139:X 07 Mar 2023 19:13:31.552 * +slave slave 127.0.0.1:6381 127.0.0.1 6381 @ myredis 127.0.0.1 6379
+20139:X 07 Mar 2023 19:13:31.557 * Sentinel new configuration saved on disk
+```
+
+如果此时主机（6379）挂掉，等一会儿哨兵就会投票选择主机（有一个投票算法）：
+
+```shell
+20139:X 07 Mar 2023 19:15:23.988 # +sdown master myredis 127.0.0.1 6379
+20139:X 07 Mar 2023 19:15:23.988 # +odown master myredis 127.0.0.1 6379 #quorum 1/1
+20139:X 07 Mar 2023 19:15:23.988 # +new-epoch 1
+20139:X 07 Mar 2023 19:15:23.988 # +try-failover master myredis 127.0.0.1 6379
+20139:X 07 Mar 2023 19:15:23.996 * Sentinel new configuration saved on disk
+20139:X 07 Mar 2023 19:15:23.996 # +vote-for-leader 83619a787c8cb09c420d6c72bcc869b315f86807 1
+20139:X 07 Mar 2023 19:15:23.996 # +elected-leader master myredis 127.0.0.1 6379
+20139:X 07 Mar 2023 19:15:23.996 # +failover-state-select-slave master myredis 127.0.0.1 6379
+20139:X 07 Mar 2023 19:15:24.053 # +selected-slave slave 127.0.0.1:6381 127.0.0.1 6381 @ myredis 127.0.0.1 6379
+20139:X 07 Mar 2023 19:15:24.053 * +failover-state-send-slaveof-noone slave 127.0.0.1:6381 127.0.0.1 6381 @ myredis 127.0.0.1 6379
+20139:X 07 Mar 2023 19:15:24.112 * +failover-state-wait-promotion slave 127.0.0.1:6381 127.0.0.1 6381 @ myredis 127.0.0.1 6379
+20139:X 07 Mar 2023 19:15:24.850 * Sentinel new configuration saved on disk
+20139:X 07 Mar 2023 19:15:24.850 # +promoted-slave slave 127.0.0.1:6381 127.0.0.1 6381 @ myredis 127.0.0.1 6379
+20139:X 07 Mar 2023 19:15:24.850 # +failover-state-reconf-slaves master myredis 127.0.0.1 6379
+20139:X 07 Mar 2023 19:15:24.897 * +slave-reconf-sent slave 127.0.0.1:6380 127.0.0.1 6380 @ myredis 127.0.0.1 6379
+20139:X 07 Mar 2023 19:15:25.872 * +slave-reconf-inprog slave 127.0.0.1:6380 127.0.0.1 6380 @ myredis 127.0.0.1 6379
+20139:X 07 Mar 2023 19:15:25.872 * +slave-reconf-done slave 127.0.0.1:6380 127.0.0.1 6380 @ myredis 127.0.0.1 6379
+20139:X 07 Mar 2023 19:15:25.928 # +failover-end master myredis 127.0.0.1 6379
+20139:X 07 Mar 2023 19:15:25.928 # +switch-master myredis 127.0.0.1 6379 127.0.0.1 6381
+20139:X 07 Mar 2023 19:15:25.928 * +slave slave 127.0.0.1:6380 127.0.0.1 6380 @ myredis 127.0.0.1 6381
+20139:X 07 Mar 2023 19:15:25.928 * +slave slave 127.0.0.1:6379 127.0.0.1 6379 @ myredis 127.0.0.1 6381
+20139:X 07 Mar 2023 19:15:25.934 * Sentinel new configuration saved on disk
+20139:X 07 Mar 2023 19:15:55.995 # +sdown slave 127.0.0.1:6379 127.0.0.1 6379 @ myredis 127.0.0.1 6381
+```
+
+最终选择了6381作为主机：
+
+```shell
+127.0.0.1:6381> INFO replication
+# Replication
+role:master
+connected_slaves:1
+slave0:ip=127.0.0.1,port=6380,state=online,offset=13946,lag=1
+master_failover_state:no-failover
+master_replid:9c852c7a7fdf4d6f75788919325ce413ca3a2493
+master_replid2:e572d0981895069902fd6096c6e40a68b30f9985
+master_repl_offset:13946
+second_repl_offset:10144
+repl_backlog_active:1
+repl_backlog_size:1048576
+repl_backlog_first_byte_offset:3124
+repl_backlog_histlen:10823
+```
+
+如果主机此时回来了，只能归并到新的主机下，当做从机，这就是哨兵模式的规则。
+
+哨兵模式的优点：
+
+1. ﻿﻿哨兵集群，基于主从复制模式，所有的主从配置优点，它全有
+2. ﻿﻿主从可以切换，故障可以转移，系统的可用性就会更好
+3. ﻿﻿哨兵模式就是主从模式的升级，手动到自动，更加健壮！
+
+缺点：
+
+1. ﻿﻿Redis 不好啊在线扩容的，集群容量一旦到达上限，在线扩容就十分麻烦！
+2. ﻿﻿实现哨兵模式的配置其实是很麻烦的，里面有很多选择！
+
+![哨兵模式配置](images/哨兵模式配置.png)
+
+
+
+## Redis缓存穿透和雪崩（面试高频，工作常用）
+
+服务的高可用问题
+
+
+
+Redis缓存的使用，极大的提升了应用程序的性能和效率，特别是数据查询方面。但同时，它也带来了一些问题。其中，最要害的问题，就是数据的一致性问题，从严格意义上讲，这个问题无解。如果对数据的一直性要求很高，那么就不能使用缓存。
+
+另外的一些典型问题就是，缓存穿透、缓存雪崩和缓存击穿。目前，业界都有比较流行的解决方案。
+
+### 缓存穿透（查不到）
+
+缓存穿透的概念很简单，用户想要查询一个数据，发现redis内存数据库没有，也就是缓存没有命中，于是向持久层数据库查询。发现也没有，于是本次查询失败。当用户很多的时候 ，缓存都没有命中（如秒杀！），于是都去请求了持久层数据库。这会给持久层数据库造成很大的压力，这时候就相当于出现了缓存穿透。
+
+> 解决方案
+
+#### 布隆过滤器
+
+布隆过滤器是一种数据结构 ，对所有可能查询的参数以hash形式存储，在控制层先进行校验，不符合则丢奔，从而避免了对底层存储系统的查询压力；
+
+![](images/image-20230307205836157.png)
+
+#### 缓存空对象
+
+当存储层不命中后，即使返回的空对象也将其缓存起来，同时会设置一个过期时间，之后再访问这个数据将会从缓存中获取，保护了后端数据源；
+
+![](images/image-20230307210100986.png)
+
+但是这种方法会存在两个问题：
+
+1. ﻿﻿如果空值能够被缓存起来 ，这就意味着缓存需要更多的空间存储更多的键，因为这当中可能会有很多的空值的键；
+2. ﻿﻿即使对空值设置了过期时间，还是会存在缓存层和存储层的数据会有一段时间窗口的不一致，这对于需要保持一致性的业务会有影响。
+
+### 缓存击穿（量太大，缓存过期！）
+
+这里需要注意和缓存击穿的区别，缓存击穿，是指—个key非常热点 ，在不停的扛着大并发，大并发集中对这一个点进行访问，当这个key在失效的瞬间，持续的大并发就穿破缓存，直接请求数据库，就像在一个屏障上凿开了一个洞。
+
+当某个key在过期的瞬间，有大量的请求并发访问，这类数据一般是热点数据，由于缓存过期，会同时访问数据库来查询最新数据，并且回写缓存，会导使数据库瞬间压力过大。
+
+
+
+> 解决方案
+
+#### 设置热点数据永不过期
+
+从缓存层面来看，没有设置过期时间 ，所以不会出现热点 key 过期后产生的问题。
+
+#### 加互斥锁
+
+分布式锁：使用分布式锁，保证对于每个key同时只有一个线程去查询后端服务，其他线程没有获得分布式锁的权限 ，因此只需要等待即可。这种方式将高并发的压力转移到了分布式锁，因此对分布式锁的考验很大。
+
+
+
+### 缓存雪崩
+
+缓存雪崩，是指在某一个时间段，缓存集中过期失效。Redis 宕机！
+
+产生雪崩的原因之一，比如在写本文的时候，马上就要到双十二零点，很快就会迎来一波抢购，这波商品时间比较集中的放入了缓存，假设缓存一个小时。那么到了凌晨一点钟的时候 ，这批商品的缓存就都过期了。而对这批商品的访问查询 ，都落到了数据库上，对于数据库而言，就会产生周期性的压力波峰。于是所有的请求都会达到存储层，存储层的调用量会暴增，造成存储层也会挂掉的情况。
+
+![](images/image-20230307210934518.png)
+
+其实集中过期，倒不是非常致命，比较致命的缓存雪崩，是缓存服务器某个节点宕机或断网。因为自然形成的缓存雪崩，一定是在某个时间段集中创建缓存，这个时候，数据库也是可以项住压力的。无非就是对数据库产生周期性的压力而已。而<u>缓存服务节点的宕机，对数据库服务器造成的压力是不可预知的，很有可能瞬间就把数据库压垮。</u>
+
+双十一：停掉一些服务（如退款服务等），保证主要的服务可用！）
+
+> 解决方案
+
+#### redis高可用
+
+这个思想的含义是，既然redis有可能挂掉，那我多增设几台redis，这样一台挂掉之后其他的还可以继续工作，其实就是搭建的集群。（异地多活！）
+
+#### 限流降级（在SpringCloud讲解过 ！）
+
+这个解决方案的思想是，在缓存失效后，通过加锁或者队列来控制读数据库写缓存的线程数量。比如对某个key只允许—个线程查询数据和写缓存 ，其他线程等待。
+
+#### 数据预热
+
+数据加热的含义就是在正式部署之前，我先把可能的数据先预先访问一遍，这样部分可能大量访问的数据就会加载到缓存中。在即将发生大并发访问前手动触发加载缓存不同的key，设置不同的过期时间，让缓存失效的时间点尽量均匀。
