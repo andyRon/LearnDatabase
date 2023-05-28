@@ -5111,23 +5111,60 @@ redo日志是为了在系统因崩溃而重启时恢复崩溃前的状态而提�
 
 #### redo log block
 
-MTR生成的redo日志存储在512字节的页，这个页叫作**redo log block**（为了区分于之前的页）。
+MTR生成的redo日志存储在==512==字节的页，这个页叫作**redo log block**（为了区分于之前的页）。
+
+**log block header**和**log block trailer**存储的是一些管理信息，真正的redo日志都是存储到占用==496==字节的**log block body**中。
 
 ![](images/image-20220414102848915.png)
 
+其中，**log block header**中几个属性：
 
+- ﻿﻿`LOG_BLOCK_HDR_NO`：每一个blook 都有一个大于0的唯一编号，该属性就表示该编号值。
+
+- ﻿`LOG_BLOCK_HIDR_DATA_LEN`：表示 block 中已经使用了多少字节，初始值为12（因为log block body 从第 12个字节处开始)。随着往block 中写入的redo 日志越来越多，该属性值也跟着增长。如果log block body 己经被全部写满，那么该属性的值被设置为512。
+
+- ﻿﻿`LOG_BLOCK_FIRST_REC_GROUP` ： 一条redo日志也可以称为一条==redo日志记录 (redo log record)==。一个MTR会生成多条redo日志记录，这个 MTR 生成的这些redo日志记录被称为一个==redo日志记录组 (redo log rocord group)==。 
+
+  这个属性就代表该block 中第一个MTR 生成的 redo 日志记录组的偏移量，其实也就是这个block中第一个MIR 生成的第一条redo 日志记录的偏移量（如果一个MTR 生成的redo 日志横跨了好多个block，那么最后一个block 中的`LOG_BLOCK_FIRST_REC_GROUP`属性就表示这个MTR 对应的redo日志结束的地方，也就是下一个MTR生成的redo 日志开始的地方）。
+
+- ﻿`LOG_BLOCK_CHECKPOINT_NO`： 表示checkpoint的序号
+
+**log block trailer** 中属性：
+
+- `LOG_BLOCK_CHECKSUM`：表示该block的校验值，用于正确性校验。
 
 #### redo日志缓冲区
 
-类比引入Buffer Pool，写入redo日志时也不能直接写到磁盘中，实际上在服务器启动时就向操作系统申请了一大片称为**redo log buffer（redo日志缓冲区）**的连续内存空间，简称log buffer。
+类比引入Buffer Pool，写入redo日志时也不能直接写到磁盘中，实际上在服务器启动时就向操作系统申请了一大片称为**==redo log buffer（redo日志缓冲区）==**的连续内存空间，简称==log buffer==。
 
 ![](images/image-20220414102927617.png)
 
+启动项`innodb_log_buffer_size`指定大小，默认16MB。
+
 #### redo日志写入log buffer
 
-`buf_free`
+顺序写入
+
+> 当想往log buffer中写入redo日志时，**应该写在哪个block的哪个偏移量处**？
+
+全局变量`buf_free`指明位置。
 
 ![](images/image-20220414103020062.png)
+
+假设有名为T1、T2的两个事务，每个事务都包含2个MTR，这几个MTR 的名字如下：
+
+- ﻿事务T1的两个MTR分别称为mtr_t1_1和mtr_t1_2;
+- ﻿事务T2的两个MTR分别称为mtt_t2_1和mtt_t2_2。
+
+每个MTR都会产生一组redo日志：
+
+![](images/image-20230528183716463.png)
+
+不同的事务是可能并发执行的，所以**T1、T2的MTR可能是交替执行的**。每当一个MTR执行完成时，伴随该MTR生成的一组redo 日志就需要被复制到log buffer中。也就是说不同事务的MTR对应的redo日志可能是交替写入log buffer的，如图19-19 所示（为了美观，我们把一个MTR中产生的所有redo日志当作一个整体）。
+
+![](images/image-20230528184333479.png)
+
+不同的MTR产生的产生的一组redo日志占用的存储空间可能不一样。
 
 
 
@@ -5135,42 +5172,86 @@ MTR生成的redo日志存储在512字节的页，这个页叫作**redo log block
 
 #### redo日志刷盘时机
 
-- Log buffer 空间不足时
+MTR运行过程中产生的一组redo日志，在MTR结束时会被复制到log buffer中，但是这日志不会总在内存里，下面一些情况会被刷新到磁盘中：
+
+- Log buffer空间不足时
+
 - 事务提交时
+
+  之所以提出 redo日志的概念，主要是因为它**占用的空间少，而且可以将其顺序写入磁盘**。引入redo日志后，虽然在事务提交时可以不把修改过的 Buffer Pool 页面立即刷新到磁盘，但是为了保证持久性，必须要把页面修改时所对应的redo 日志刷新到磁盘：否则系统崩溃后，无法将该事务对页面所做的修改恢复过来。
+
+- 后台有一个线程，大约以**每秒一次**的频率将log buffer中的redo日志刷新到磁盘。
+
 - 正常关闭服务器时
 - 做checkpoint时
 
-
-
 #### redo日志文件组
 
-MySQL的数据目录中的**ib_logfile0**和**ib_logfile1**两个文件就是log buffer默认刷盘的两个磁盘文件。
+MySQL的数据目录（`show variables like 'datadir';`）中的**ib_logfile0**和**ib_logfile1**两个文件就是log buffer默认刷盘的两个磁盘文件。
 
-- innodb_log_group_home_dir：指定redo日志文件所在目录，默认为当前数据目录
-- innodb_log_file_size
-- innodb_log_file_in_group：指定redo日志文件的个数，默认为2，最大为100。
+调节redo日志文件的启动选项：
 
+- `innodb_log_group_home_dir`：指定redo日志文件所在目录，默认为当前数据目录。
+- `innodb_log_file_size`：指定每个redo日志文件大小，默认48MB。
+- `innodb_log_files_in_group`：指定redo日志文件的个数，默认为2，最大为100。`ib_logfile[数字]`
 
+> redo日志文件的总大小 = `innodb_log_file_size` * `innodb_log_files_in_group`
+
+redo日志文件从**ib_logfile0**开始写起，到最大数目，就重新覆盖第0个（循环）。
 
 #### redo日志文件格式
 
+log buffer 本质上是一片连续的内存空间，被划分成若干个512字节大小的block。将 log buffer 中的redo 日志刷新到磁盘的本质就是把 block 的镜像写入日志文件中，所以redo 日志文件其实也是由若干个 512字节大小的block组成。
+
+在redo 日志文件组中，每个文件的大小都一样，格式也一样，都是由下面两部分组成的：
+
+- ﻿前2,048个字节(也就是前 4个block）用来存储一些管理信息;
+- ﻿从第2,048字节往后的字节用来存储log butfer 中的block 镜像。
+
+所以前面所说的循环使用redo 日志文件，其实是从每个日志文件的前 2,048 个字节开始算起：
+
 ![](images/image-20220427100801011.png)
+
+每个redo日志文件的前2048个字节（前4个特殊block），分别是：
+
+- `log file header`：描述redo日志文件的一些整体属性
 
 ![](images/image-20220427100815758.png)
 
 ![](images/image-20220427100833031.png)
 
+- `checkpoint1`：关于checkpoint的一些属性。
+
 ![](images/image-20220427100951545.png)
 
 ![](images/image-20220427101002779.png)
 
+- 第三个block未使用
+- `checkpoint2`：结构与`checkpoint1`一样。
+
 ### 19.7 log sequence number（lsn）
 
-全局变量**log sequence number（lsn）**，用来记录当前总共已经写入的redo日志量。
+全局变量**log sequence number（==lsn==）**，用来记录当前总共已经写入的redo日志量。lsn初始值设定为==8704==。
+
+在向log buffer 中写入redo 日志时并不是一条一条写入的，而是以 MTR 生成的一组redo 日志为单位写入的，而且实际上是把日志内容写在了log block body 处。但是在统计Isn 的增长量时，是按照实际写入的日志量加上占用的log block header 和 log block trailer 来计算的。
+
+🔖
+
+![](images/image-20230528214721092.png)
+
+![](images/image-20230528214736172.png)
+
+![](images/image-20230528214750850.png)
+
+> 每一组由MTR生成的redo日志都有一个唯一的lsn值与其对应；lsn值越小，说明redo日志产生的越早。
 
 #### flushed_to_disk_lsn
 
+全局变量`buf_next_to_write`用来标记当前log buffer中已经有哪些日志被刷新到磁盘中了。
 
+全局变量`flushed_to_disk_lsn`表示刷新到磁盘中的redo日志量。
+
+🔖
 
 #### lsn值和redo日志文件组中的偏移量的对应关系
 
@@ -5178,9 +5259,13 @@ MySQL的数据目录中的**ib_logfile0**和**ib_logfile1**两个文件就是log
 
 #### flush链表中的lsn
 
+MTR结束时，还要把在MTR执行过程中修改过的页面加入到Buffer Pool的flush链表中。
+
 ![](images/image-20220427101252144.png)
 
-### 19.8 checkpoint
+🔖
+
+### 19.8 checkpoint 🔖
 
 判断某些redo日志占用的磁盘空间是否可以覆盖的依据，就是它对应的脏页是否已经被刷新到了磁盘中。
 
@@ -5188,7 +5273,7 @@ MySQL的数据目录中的**ib_logfile0**和**ib_logfile1**两个文件就是log
 
 
 
-### 19.9 用户线程批量从flush链表中刷出脏页
+### 19.9 用户线程批量从flush链表中刷出脏页 🔖
 
 
 
@@ -5213,13 +5298,16 @@ Last checkpoint at           62003410
 ...
 ```
 
-
+- ﻿﻿Log sequence number 表示系统中的lsn值，也就是当前系统已经写入的redo 日志量，包括写入到log buffer 中的redo日志：
+- ﻿﻿Log fushed up to 表示`fushed_to_disk_lsn`的值，也就是当前系统已经写入磁盘的redo日志量；
+- ﻿﻿Pages flushed up to 表示flush链表中被最早修改的那个页面对应的 oldest_modification属性值：
+- ﻿﻿Last checkpoint at 表示当前系统的checkpoint_lsn 值。
 
 ### 19.11 innodb_flush_log_at_trx_commit的用法
 
 
 
-### 19.12 崩溃恢复
+### 19.12 崩溃恢复🔖
 
 #### 确定恢复的起点
 
@@ -5265,32 +5353,36 @@ redo日志存放在大小为512字节的block中。每一个block 被分为3 部
 
 redo 日志缓冲区是一片连续的内存空间，由若干个block 组成：可以通过启动选项 innodb_log_buffer_size 来调整它的大小。
 
-redo日志文件组由若干个日志文件组成，这些redo日志文件是被循环使用的。redo日志文件组中每个文件的大小都一样，格式也一样，都是由两部分组成：
+redo日志文件组由若干个日志文件组成，这些redo日志文件是被==循环==使用的。redo日志文件组中每个文件的大小都一样，格式也一样，都是由两部分组成：
 
 - ﻿前2,048个字节〈也就是能 4个block）用来存储一些管理信息；
-- ﻿从第2,048 字节往后的字节用来存储 1og buffer 中的block 镜像。
+- ﻿从第2,048 字节往后的字节用来存储 log buffer 中的block 镜像。
 
-lsn指己经写入的redo 日志量，fushed to disk 1sn 指刷新到磁盘中的redo 日志量，fush链表中的脏页按照修改发生的时间顺序进行排序，也就是按照oldest modification 代表的1sn值进行排序。被多次更新的页面不会重复插入到 fush 链表中，但是会更新 newest modification属性的值。checkpoint 1sn 表示当前系统中可以被覆盖的redo 日志总量是多少。
+lsn指己经写入的redo 日志量，`fushed_to_disk_lsn`指刷新到磁盘中的redo日志量，fush链表中的脏页按照修改发生的时间顺序进行排序，也就是按照`oldest_modification` 代表的1sn值进行排序。被多次更新的页面不会重复插入到 fush 链表中，但是会更新 `newest_modification`属性的值。`checkpoint_lsn` 表示当前系统中可以被覆盖的redo 日志总量是多少。
 
-redo 日志占用的磁盘空问在它对应的脏页己经被刷新到磁盘后即可被覆盖。执行一次checkpoint 的意思就是增加checkpoint 1sn 的值，然后把相关的信息存放到日志文件的管理信息中。
+redo 日志占用的磁盘空问在它对应的脏页己经被刷新到磁盘后即可被覆盖。执行一次checkpoint 的意思就是增加`checkpoint_lsn` 的值，然后把相关的信息存放到日志文件的管理信息中。
 
-innodb flush_ 1og_at trx commit 系统变量控制着在事务提交时是否将该事务运行过程中产生的redo 刷新到磁盘。
+`innodb_flush_log_at_trx_commit` 系统变量控制着在事务提交时是否将该事务运行过程中产生的redo 刷新到磁盘。
 
-在崩溃恢复过程中，从redo日志文件组第一个文件的管理信息中取出最近发生的那次checkpoint 信息，然后从checkpoint 1sn 在日志文件组中对应的偏移量开始，一直扫描日志文件中的 block，直到某个block 的 LOG BLOCK HDR DATA LEN 值不等于 512 为止。在恢复过程中，使用哈希表可加快恢复过程，并且会跳过己经刷新到磁盘的页面。
+在崩溃恢复过程中，从redo日志文件组第一个文件的管理信息中取出最近发生的那次checkpoint 信息，然后从`checkpoint_lsn` 在日志文件组中对应的偏移量开始，一直扫描日志文件中的 block，直到某个block 的 `LOG_BLOCK_HDR_DATA_LEN` 值不等于 512 为止。在恢复过程中，使用哈希表可加快恢复过程，并且会跳过己经刷新到磁盘的页面。
+
+
 
 ## 20 后悔了怎么办——undo日志
 
 ### 20.1 事务回滚的需求
 
-每当要对一条记录进行修改是（Insert、Delete、Update），都需要留一手——**把回滚时所需要的东西都记下来**：
+==回滚（rollback）==
+
+数据库中的回滚跟悔棋差不多：<u>插入了一条记录，回滚对应的操作就是把这条记录删除掉；更新了一条记录，回滚对应的操作就是把该记录更新回旧值：刪除了一条记录；回滚对应的操作自然就是把该记录再插进去。</u>
+
+每当要对一条记录进行改动时（Insert、Delete、Update），都需要留一手——**把回滚时所需要的东西都记下来**：
 
 - 在插入一条记录时，至少要把这条记录的主键值记下来，这样之后回滚时只需要把这个主键值对应的记录删掉就好了；
 - 在删除一条记录时，至少要把这条记录中的内容都记下来，这样之后回滚时再把由这些内容组成的记录插入到表中就好了；
 - 在修改一条记录时，至少要把被更新的列的旧值记下来，这样之后回滚时再把这些列更新为旧值就好了。
 
-为了回滚而记录的东西称为**撤销日志（undo log）**。
-
-
+为了回滚而记录的东西称为**==撤销日志（undo log）==**。
 
 ### 20.2 事务id
 
@@ -5300,11 +5392,22 @@ innodb flush_ 1og_at trx commit 系统变量控制着在事务提交时是否将
 
 #### 事务id是怎么生成的
 
+- 服务器会在内存中维护一个全局变量，每当需要为某个事务分配事务id时，就会把该变量的值当作事务 id 分配给该事务，并且把该变量自增1。
 
+- ﻿每当这个变量的值为 256 的倍数时，就会将该变量的值刷新到系统表空间中页号为5的页面中一个名为**Max Trx ID**的属性中，这个属性占用8字节的存储空间。
+- ﻿当系统下一次重新启动时，会将这个**Max Trx ID**属性加载到内存中，将该值加上256之后赋值给前面提到的全局变量（因为在上次关机时，该全局变量的值可能大于磁盘页面中的**Max Trx ID**属性值）。
+
+这样就可以保证整个系统中分配的事务 id值是一个递增的数字。先分配事务计的事务得到的是较小的事务 id，后分配事务id的事务得到的是较大的事务id。
 
 #### trx_id隐藏列
 
+聚簇索引的记录除了会保存完整的用户数据以外，而且还会自动添加名为 `trx_id`、`roll_pointer`的隐藏列。如果用户没有在表中定义主键以及不允许存储 NULL值的 UNIQUE 键，还会自动添加一个名为`row_id` 的隐藏列。
 
+一条记录在页面中的真实结构：
+
+![](images/image-20230528222810525.png)
+
+`trx_id`就是对这个聚簇索引记录进行改动的语句所在的事务对应的事务id。
 
 ### 20.3 undo日志的格式
 
@@ -5316,6 +5419,14 @@ Create Table undo_demo (
   Primary Key (id),
   Key idx_key1 (key1)
 ) Engine=InnoDB Charset=utf8;
+```
+
+`FIL_PAGE_UNDO_LOG`
+
+
+
+```mysql
+Select * From information_schema.innodb_tables Where name = 'xiaohaizi/undo_demo';
 ```
 
 
@@ -5348,7 +5459,7 @@ Create Table undo_demo (
 
 ### 20.5 FIL_PAGE_UNDO_LOG页面
 
-FIL_PAGE_UNDO_LOG类型的页面是**专门用来存储undo日志的**，简称Undo页面。
+`FIL_PAGE_UNDO_LOG`类型的页面是**专门用来存储undo日志的**，简称==Undo页面==。
 
 ![](images/image-20220414105012613.png)
 
@@ -5358,13 +5469,21 @@ FIL_PAGE_UNDO_LOG类型的页面是**专门用来存储undo日志的**，简称U
 
 #### 单个事务中的Undo页面链表
 
-
+![](images/image-20230528230955420.png)
 
 #### 多个事务中的Undo页面链表
 
 
 
 ### 20.7 undo日志具体写入过程
+
+#### 段的概念
+
+段是一个逻辑上的概念，本质上是由若干个零散页面和若干个完整的区组成的。
+
+
+
+
 
 #### Undo Log Segment Header
 
@@ -5374,21 +5493,95 @@ FIL_PAGE_UNDO_LOG类型的页面是**专门用来存储undo日志的**，简称U
 
 #### Undo Log Header
 
+
+
+![](images/image-20230528231751806.png)
+
+
+
 ### 20.8 重用Undo页面
 
 
 
 ### 20.9 回滚段
 
+#### 回滚段的概念
+
+
+
+#### 从回滚段中申请Undo页面链表
+
+
+
+#### 多个回滚段
+
+
+
+![](images/image-20230528232134827.png)
+
+#### 回滚段的分类
+
+
+
+#### roll_pointer的组成
+
+![](images/image-20230528232221402.png)
+
+
+
+#### 为事务分配Undo页面链表的详细过程
+
+
+
 
 
 ### 20.10 回滚段相关配置
+
+#### 配置回滚段数量
+
+
+
+#### 配置undo表空间
+
+
 
 
 
 ### 20.11 undo日志在崩溃恢复时的作用
 
 
+
+### 20.12 总结
+
+为了保证事务的原子性，InnoDB设计者引入了undo 日志。undo日志记载了回滚一个操作所需的必要内容。
+
+在事务对表中的记录进行改动时，才会为这个事务分配一个唯一的事务id。事务id值是一个递增的数宇。先被分配 id 的事务得到的是较小的事务id，后被分配 id 的事务得到的是较大的事务id。 未被分配事务 id的事务的事务id默认是0。聚簇索引记录中有一个trx_id隐藏列，它代表**对这个聚簇索引记录进行改动的语句所在的事务对应的事务id**。
+
+InnoDB设计者针对不同的场景设计了不同类型的undo 日志，比如`TRX_UNDO_INSERT_REC`、 `TRX_UNDO_DEL_MARK_REC`、`TRX_UNDO_UPD_EXIST_REC`等。
+
+类型为`FIL_PAGE_UNDO_LOG`的页面是专门用来存储undo 日志的，我们简称为**Undo页面**。
+
+在一个事务执行过程中，最多分配4 个Undo页面链表，分别是：
+
+- ﻿针对普通表的 insert undo 链表;
+- ﻿针对普通表的 update undo 链表：
+- ﻿针对临时表的 insert undo 链表：
+- ﻿针对临时表的 update undo 链表。
+
+只有在真正用到这些链表的时候才去创建它们。
+
+每个 Undo 页面链表都对应一个**Undo Log Segment**。 Undo页面链表的第一个页面中有一个名为 **Undo Log Segment Header** 的部分，专门用来存储关于这个段的一些信息。
+
+同一个事务向一个Undo 页面链表中写入的 undo 日志算是一个组，每个组都以一个**Undo Log Header** 部分开头。
+
+一个 Undo 页面链表如果可以被重用，需要符合下面的条件：
+
+- ﻿该链表中只包含一个Undo页面：
+- ﻿该Undo页面己经使用的空间小于整个页面空间的3/4。
+
+每一个Rollback Segment Header 页面都对应者一个回滚段，每个回滚段包含 1,024个 undo slot，一个undo slot 代表一个Undo 页面链表的第一个页面的页号。目前，InnoDB 最多支持128 个回滚段，其中第0号、第`33~127`号回滚段是针对普通表设计的，第`1~32`号回滚段是针对临时表设计的。
+
+我们可以选择將 undo 日志记录到专门的undo 表空间中，在undo 表空间中的文件大到一定程度时，可以自动将该 undo 表空问截断为小文件。
 
 ## 21 一条记录的多幅面孔——事务隔离级别和MVCC
 
@@ -5454,19 +5647,21 @@ Select @@transaction_isolation;
 
 聚簇索引记录中包含两个必要的隐藏列：
 
-- trx_id：一个事务每次对某条聚簇索引记录进行改动时，都会把该事务的事务id赋值给这个隐藏列。
-- roll_pointer：每次对某条聚簇索引记录进行改动时，都会把旧的版本写入到undo日志。这个隐藏列相当于一个指针，可通过它找到该记录修改前的信息。
+- `trx_id`：一个事务每次对某条聚簇索引记录进行改动时，都会把该事务的事务id赋值给这个隐藏列。
+- `roll_pointer`：每次对某条聚簇索引记录进行改动时，都会把旧的版本写入到undo日志。这个隐藏列相当于一个指针，可通过它找到该记录修改前的信息。
 
 **多版本并发控制（Multi-Version Concurrency COntrol，MVCC）**
+
+
 
 #### ReadView
 
 > 核心问题：需要判断版本链中的那个版本是当前事务可见的。
 
-- m_ids
-- min_trx_id
-- max_trx_id
-- creator_trx_id
+- `m_ids`
+- `min_trx_id`
+- `max_trx_id`
+- `creator_trx_id`
 
 ##### 1.Read Committed——每次读取数据前都生成一个ReadView
 
@@ -5490,7 +5685,40 @@ MVCC指在使用Read Committed、Repeatable Read这两种隔离级别的事务�
 
 
 
-## 22 工作面试老大难——锁
+### 21.5 总结
+
+并发的事务在运行过程中会出现一些可能引发一致性问题的现象，具体如下（由于SQL标准中对脏写、脏读、不可重复读以及幻读的定义比较模糊，本书采用论文 A Critigue of ANs/$2L Isolation Levels 中对于胜写、脏读、不可重复读以及幻读现象的定义)。
+
+- ﻿脏写：一个事务修改了另一一个未提交事务修改过的数据。
+- ﻿脏读：广义解释是一个事务读到了另一个未提交事务修改过的数据。它也有对应的严格解释。
+- ﻿不可重复读：广义解释是一个事务修改了另一个未提交事务读取的数据。它也有对应的严格解释，请到本章前文参考详情。
+- ﻿幻读：一个事务先根据某些搜索条件查询出一些记录，在该事务未提交时，另一个事务写入了一些符合那些搜素条件的记录。它也有对应的严格解释。
+
+SOL标准中的4种隔离级别如下所示。
+
+- READ UNCOMMITTED：可能发生脏读、不可重复读和幻读现象。
+
+- ﻿CREAD COMMITTED：可能发生不可重复读和幻读现象，但是不可能发生脏读现象。
+- ﻿REPEATABLE READ：可能发生幻读现象，但是不可能发生脏读和不可重复读的现象。
+- ﻿﻿SERIALIZABLE：各种现象都不可以发生。
+
+实际上，MySQL 在REPEATABLE READ 隔离级别下是可以在很大程度上禁止出现幻读现象的。
+
+下面的语句用来设置事务的隔离级别：
+
+```mysql
+SET [GLOBAL|SESSION] TRANSACTION ISOLATION LEVEL level;
+```
+
+聚簇索引记录和 undo 日志中的 roll_pointer 属性可以串连成一个记录的版本链。
+
+通过生成ReadView来判断记录的某个版本的可见性，其中 READ COMMITTD 在每一次进行普通 SELECT 操作前都会生成一个ReadView，而 REPEATABLE READ 只在第一次进行普通 SELECT 操作前生成一个 ReadView，之后的查询操作都重复使用这个 ReadView。
+
+当前系统中，如果最早生成的ReadView 不再访问undo 日志以及打了删除标记的记录，则可以通过purge操作将它们清除。
+
+
+
+## 22 工作面试老大难——锁 🔖🔖
 
 ### 22.1 解决并发事务带来问题的两种基本方式
 
@@ -5539,6 +5767,10 @@ MVCC指在使用Read Committed、Repeatable Read这两种隔离级别的事务�
 
 意向独占锁（Intention Exclusive Lock，简称IX锁）
 
+
+
+![](images/image-20230528235406109.png)
+
 ### 22.3 MySQL中的行锁和表锁
 
 #### 其它存储引擎中的锁
@@ -5550,10 +5782,24 @@ MVCC指在使用Read Committed、Repeatable Read这两种隔离级别的事务�
 ##### 1.InnoDB中的表级锁
 
 - 表级别的S锁、X锁
+
+
+
 - 表级别的IS锁、IX锁
+
+
+
+
+
 - 表级别的Auto-INC锁
 
+
+
 ##### 2.InnoDB中的行级锁🔖
+
+行级锁也叫记录锁
+
+即使对同一条记录加行锁，如果记录的类型不同，起到的功效也是不同的。
 
 
 
@@ -5563,9 +5809,15 @@ MVCC指在使用Read Committed、Repeatable Read这两种隔离级别的事务�
 
 ![](images/image-20220414113251107.png)
 
+
+
 ### 22.4 语句加锁分析
 
+```mysql
+Alter Table hero Add Index indx_name (name);
+```
 
+![](images/image-20230529000504253.png)
 
 #### 普通的Select语句
 
@@ -5589,7 +5841,17 @@ MVCC指在使用Read Committed、Repeatable Read这两种隔离级别的事务�
 
 
 
-##### 2.外键检测
+##### 2.外键检查
+
+```mysql
+Create Table horse (
+	number Int Primary Key,
+  horse_name Varchar(100),
+  Foreign Key (number) References hero(number)
+) Engine=InnoDB Charset=utf8;
+```
+
+
 
 
 
@@ -5597,15 +5859,21 @@ MVCC指在使用Read Committed、Repeatable Read这两种隔离级别的事务�
 
 #### 使用information_schema数据库中的表索取锁信息
 
-**INNODB_TRX**表存储了InnoDB当前正在执行的事务信息。
+- **INNODB_TRX**表存储了InnoDB当前正在执行的事务信息。
 
-**INNODB_LOCKS**
 
-**INNODB_LOCK_WAITS**
+
+- **INNODB_LOCKS**
+
+
+
+- **INNODB_LOCK_WAITS**
 
 
 
 #### 使用Show Engine Innodb Status获取锁信息
+
+
 
 ### 22.6 死锁
 
