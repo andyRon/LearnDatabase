@@ -693,7 +693,7 @@ OK
 
 
 
-### zset（有序集合，也不重复）
+### zset（有序集合sorted set，也不重复）
 
 在set的基础上，增加了一个用户排序的值
 
@@ -754,7 +754,7 @@ zcount
 
 ## 三种特殊数据类型
 
-### geospatial 地理位置
+### geospatial 地理位置geohash
 
 朋友的定位，附近的人，打车距离计算？
 
