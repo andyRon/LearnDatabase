@@ -282,17 +282,115 @@ mysql> show variables like 'transaction_isolation';
 
 #### 事务隔离的实现
 
+在MySQL中，实际上**每条记录在更新的时候都会同时记录一条回滚操作**。记录上的最新值，通过回滚操作，都可以得到前一个状态的值。
 
+假设一个值从1被按顺序改成了2、3、4，在==回滚日志==（Undo Log）里面就会有类似下面的记录。
+
+> 回滚日志和重做日志在数据库事务管理中各自承担不同的责任。回滚日志主要用于确保事务的原子性和数据的一致性，而重做日志则主要用于保证事务的持久性和在故障发生时的数据恢复。
+
+![](images/image-20240415172449636.png)
+
+当前值是4，但是在查询这条记录的时候，不同时刻启动的事务会有不同的read-view。如图中看到的，在视图A、B、C里面，这一个记录的值分别是1、2、4，同一条记录在系统中可以存在多个版本，就是数据库的**多版本并发控制（MVCC）**。对于read-view A，要得到1，就必须将当前值依次执行图中所有的回滚操作得到。
+
+同时你会发现，即使现在有另外一个事务正在将4改成5，这个事务跟read-view A、B、C对应的事务是不会冲突的。
+
+你一定会问，回滚日志总不能一直保留吧，什么时候删除呢？答案是，**在不需要的时候才删除**。也就是说，系统会判断，当没有事务再需要用到这些回滚日志时，回滚日志会被删除。
+
+什么时候才不需要了呢？就是当系统里**没有比这个回滚日志更早的read-view的时候**。
+
+> 为什么建议你尽量不要使用长事务？
+
+长事务意味着系统里面会存在很**老的事务视图**。由于这些事务随时可能访问数据库里面的任何数据，所以这个事务提交之前，数据库里面它可能用到的回滚记录都必须保留，这就会导致大量占用存储空间。
+
+在MySQL 5.5及以前的版本，回滚日志是跟数据字典一起放在ibdata文件里的，即使长事务最终提交，回滚段被清理，文件也不会变小。<u>我见过数据只有20GB，而回滚段有200GB的库。最终只好为了清理回滚段，重建整个库。</u>
+
+除了对回滚段的影响，长事务还占用锁资源，也可能拖垮整个库，这个我们会在后面讲锁的时候展开。
 
 #### 事务的启动方式
 
+1. 显式启动事务语句， `begin` 或 `start transaction`。配套的提交语句是`commit`，回滚语句是`rollback`。
+2. `set autocommit=0`，这个命令会将这个线程的自动提交关掉。意味着如果你只执行一个select语句，这个事务就启动了，而且并不会自动提交。这个事务持续存在直到你主动执行commit 或 rollback 语句，或者断开连接。
 
+有些客户端连接框架会默认连接成功后先执行一个set autocommit=0的命令。这就导致接下来的查询都在事务中，如果是长连接，就导致了意外的长事务。因此，建议总是使用`set autocommit=1`, 通过显式语句的方式来启动事务。
 
+🔖
 
+```mysql
+select * from information_schema.innodb_trx where TIME_TO_SEC(timediff(now(),trx_started))>60;   
+```
 
 
 
 ### 4 深入浅出索引（上）
+
+#### 索引的常见模型
+
+- ==哈希表==是一种以键-值（key-value）存储数据的结构，我们只要输入待查找的键即key，就可以找到其对应的值即Value。哈希的思路很简单，把值放在数组里，用一个哈希函数把key换算成一个确定的位置，然后把value放在数组的这个位置。
+
+不可避免地，多个key值经过哈希函数的换算，会出现同一个值的情况。处理这种情况的一种方法是，**拉出一个链表**。
+
+假设，你现在维护着一个身份证信息和姓名的表，需要根据身份证号查找对应的名字，这时对应的哈希索引的示意图如下所示：
+
+![](images/image-20240415174628264.png)
+
+图中，User2和User4根据身份证号算出来的值都是N，但没关系，后面还跟了一个链表。假设，这时候你要查ID_card_n2对应的名字是什么，处理步骤就是：首先，将ID_card_n2通过哈希函数算出N；然后，按顺序遍历，找到User2。
+
+需要注意的是，图中四个ID_card_n的值并不是递增的，这样做的好处是**增加**新的User时速度会很快，只需要往后追加。但缺点是，因为不是有序的，所以哈希索引做**区间查询**的速度是很慢的。例如要找身份证号在`[ID_card_X, ID_card_Y]`这个区间的所有用户，就必须全部扫描一遍了。
+
+所以，哈希表这种结构适用于**只有等值查询**的场景，比如Memcached及其他一些NoSQL引擎。
+
+- ==有序数组==
+
+而有序数组在等值查询和范围查询场景中的性能就都非常优秀。还是上面这个根据身份证号查名字的例子，如果我们使用有序数组来实现的话，示意图如下所示：
+
+![](images/image-20240415174924961.png)
+
+🔖
+
+所以，**有序数组索引只适用于静态存储引擎**，比如你要保存的是2017年某个城市的所有人口信息，这类不会再修改的数据。
+
+
+
+- 搜索树
+
+二叉搜索树也是课本里的经典数据结构了。
+
+![](images/image-20240415175144127.png)
+
+二叉搜索树的特点是：父节点左子树所有结点的值小于父节点的值，右子树所有结点的值大于父节点的值。这样如果你要查ID_card_n2的话，按照图中的搜索顺序就是按照UserA -> UserC -> UserF -> User2这个路径得到。这个时间复杂度是O(log(N))。
+
+当然为了**维持**O(log(N))的查询复杂度，你就需要保持这棵树是**平衡二叉树**。为了做这个保证，更新的时间复杂度也是O(log(N))。
+
+
+
+
+
+> 每碰到一个新数据库，我们需要先关注它的数据模型，这样才能从理论上分析出这个数据库的适用场景。
+
+#### InnoDB 的索引模型
+
+在InnoDB中，表都是**根据主键顺序以索引的形式存放的**，这种存储方式的表称为==索引组织表==。
+
+- 主键索引的叶子节点存的是整行数据。在InnoDB里，主键索引也被称为==聚簇索引（clustered index）==。
+- 非主键索引的叶子节点内容是主键的值。在InnoDB里，非主键索引也被称为==二级索引（secondary index）==。
+
+
+
+> 基于主键索引和普通索引的查询有什么区别？
+>
+> 回表
+
+
+
+#### 索引维护
+
+
+
+
+
+#### 小结
+
+B+树能够很好地配合磁盘的读写特性，减少单次查询的磁盘访问次数。
 
 
 
@@ -300,7 +398,57 @@ mysql> show variables like 'transaction_isolation';
 
 
 
+#### 覆盖索引
+
+如果执行的语句是`select ID from T where k between 3 and 5`，这时只需要查ID的值，而ID的值已经在k索引树上了，因此可以直接提供查询结果，不需要回表。也就是说，在这个查询里面，索引k已经“覆盖了”我们的查询需求，我们称为**覆盖索引**。
+
+由于覆盖索引可以减少树的搜索次数，显著提升查询性能，所以使用覆盖索引是一个常用的性能优化手段。
+
+
+
+#### 最左前缀原则
+
+![](images/image-20240415180233096.png)
+
+
+
+#### 索引下推
+
+
+
+
+
+
+
 ### 6 全局锁和表锁 ：给表加个字段怎么有这么多阻碍？
+
+
+
+#### 全局锁
+
+` Flush tables with read lock (FTWRL)`
+
+
+
+全局锁的典型使用场景是，做全库逻辑备份。
+
+
+
+![](images/image-20240415180421962.png)
+
+#### 表级锁
+
+MySQL里面表级别的锁有两种：
+
+- 一种是表锁，语法是 `lock tables … read/write`
+
+
+
+
+
+- 一种是==元数据锁（meta data lock，MDL)==。
+
+
 
 
 
@@ -308,8 +456,904 @@ mysql> show variables like 'transaction_isolation';
 
 
 
+在InnoDB事务中，行锁是在需要的时候才加上的，但并不是不需要了就立刻释放，而是要等到事务结束时才释放。这个就是两阶段锁协议。
+
+
+
+#### 死锁和死锁检测
+
+![](images/image-20240415181258812.png)
+
+
+
+
+
+
+
 ### 8 事务到底是隔离的还是不隔离的？
+
+
+
+```mysql
+mysql> CREATE TABLE `t` (
+  `id` int(11) NOT NULL,
+  `k` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB;
+insert into t(id, k) values(1,1),(2,2);
+```
+
+![](images/image-20240415181628930.png)
+
+#### “快照”在MVCC里是怎么工作的？
+
+
+
+![](images/image-20240415182058685.png)
+
+
+
+
+
+![](images/image-20240415182131512.png)
+
+
+
+#### 更新逻辑
+
+![](images/image-20240415182224803.png)
+
+
+
+
 
 ## 实践篇
 
-### 9 
+### 9 普通索引和唯一索引，应该怎么选择？
+
+#### 查询过程
+
+
+
+#### 更新过程
+
+
+
+#### change buffer的使用场景
+
+
+
+#### 索引选择和实践
+
+
+
+#### change buffer 和 redo log
+
+
+
+### 10 MySQL为什么有时候会选错索引？
+
+
+
+#### 优化器的逻辑
+
+
+
+#### 索引选择异常和处理
+
+
+
+
+
+### 11 怎么给字符串字段加索引？
+
+
+
+#### 前缀索引对覆盖索引的影响
+
+
+
+
+
+### 12 为什么我的MySQL会“抖”一下？
+
+
+
+
+
+#### InnoDB刷脏页的控制策略
+
+
+
+
+
+### 13 为什么表数据删掉一半，表文件大小不变？
+
+
+
+#### 参数innodb_file_per_table
+
+
+
+
+
+#### 数据删除流程
+
+
+
+
+
+#### 重建表
+
+
+
+
+
+#### Online 和 inplace
+
+
+
+
+
+### 14 count(*)这么慢，我该怎么办？
+
+#### count(*)的实现方式
+
+
+
+#### 用缓存系统保存计数
+
+
+
+#### 在数据库保存计数
+
+
+
+#### 不同的count用法
+
+
+
+### 15 日志和索引相关问题
+
+
+
+### 16 “orderby”是怎么工作的？
+
+
+
+#### 全字段排序
+
+
+
+#### rowid排序
+
+
+
+#### 全字段排序 VS rowid排序
+
+
+
+### 17 如何正确地显示随机消息？
+
+
+
+#### 内存临时表
+
+
+
+#### 磁盘临时表
+
+
+
+
+
+#### 随机排序方法
+
+
+
+### 18 为什么这些SQL语句逻辑相同，性能却差异巨大？
+
+
+
+#### 案例一：条件字段函数操作
+
+```mysql
+CREATE TABLE `tradelog` (
+  `id` int(11) NOT NULL,
+  `tradeid` varchar(32) DEFAULT NULL,
+  `operator` int(11) DEFAULT NULL,
+  `t_modified` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `tradeid` (`tradeid`),
+  KEY `t_modified` (`t_modified`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+select count(*) from tradelog where month(t_modified)=7;
+```
+
+
+
+
+
+#### 案例二：隐式类型转换
+
+```mysql
+select * from tradelog where tradeid=110717;
+```
+
+
+
+
+
+#### 案例三：隐式字符编码转换
+
+```mysql
+CREATE TABLE `trade_detail` (
+  `id` int(11) NOT NULL,
+  `tradeid` varchar(32) DEFAULT NULL,
+  `trade_step` int(11) DEFAULT NULL, /*操作步骤*/
+  `step_info` varchar(32) DEFAULT NULL, /*步骤信息*/
+  PRIMARY KEY (`id`),
+  KEY `tradeid` (`tradeid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+insert into tradelog values(1, 'aaaaaaaa', 1000, now());
+insert into tradelog values(2, 'aaaaaaab', 1000, now());
+insert into tradelog values(3, 'aaaaaaac', 1000, now());
+
+insert into trade_detail values(1, 'aaaaaaaa', 1, 'add');
+insert into trade_detail values(2, 'aaaaaaaa', 2, 'update');
+insert into trade_detail values(3, 'aaaaaaaa', 3, 'commit');
+insert into trade_detail values(4, 'aaaaaaab', 1, 'add');
+insert into trade_detail values(5, 'aaaaaaab', 2, 'update');
+insert into trade_detail values(6, 'aaaaaaab', 3, 'update again');
+insert into trade_detail values(7, 'aaaaaaab', 4, 'commit');
+insert into trade_detail values(8, 'aaaaaaac', 1, 'add');
+insert into trade_detail values(9, 'aaaaaaac', 2, 'update');
+insert into trade_detail values(10, 'aaaaaaac', 3, 'update again');
+insert into trade_detail values(11, 'aaaaaaac', 4, 'commit');
+
+    
+```
+
+
+
+### 19 为什么我只查一行的语句，也执行这么慢？
+
+
+
+#### 第一类：查询长时间不返回
+
+
+
+
+
+#### 第二类：查询慢
+
+
+
+
+
+### 20 幻读是什么，幻读有什么问题？
+
+
+
+#### 幻读是什么？
+
+
+
+
+
+#### 幻读有什么问题？
+
+
+
+
+
+#### 如何解决幻读？
+
+
+
+
+
+### 21 为什么我只改一行的语句，锁这么多？
+
+
+
+#### 案例一：等值查询间隙锁
+
+
+
+
+
+#### 案例二：非唯一索引等值锁
+
+
+
+
+
+#### 案例三：主键索引范围锁
+
+
+
+
+
+#### 案例四：非唯一索引范围锁
+
+
+
+
+
+#### 案例五：唯一索引范围锁bug
+
+
+
+
+
+#### 案例六：非唯一索引上存在"等值"的例子
+
+
+
+
+
+#### 案例七：limit 语句加锁
+
+
+
+
+
+#### 案例八：一个死锁的例子
+
+
+
+
+
+### 22 MySQL有哪些“饮鸩止渴”提高性能的方法？
+
+#### 短连接风暴
+
+
+
+
+
+#### 慢查询性能问题
+
+
+
+
+
+#### QPS突增问题
+
+
+
+### 23 MySQL是怎么保证数据不丢的？
+
+
+
+#### binlog的写入机制
+
+
+
+
+
+#### redo log的写入机制
+
+
+
+
+
+### 24 MySQL是怎么保证主备一致的？
+
+#### MySQL主备的基本原理
+
+
+
+![](images/image-20240415185547677.png)
+
+
+
+#### binlog的三种格式对比
+
+
+
+
+
+#### 为什么会有mixed格式的binlog？
+
+
+
+#### 循环复制问题
+
+
+
+### 25 MySQL是怎么保证高可用的？
+
+#### 主备延迟
+
+
+
+#### 主备延迟的来源
+
+
+
+#### 可用性优先策略
+
+
+
+### 26 备库为什么会延迟好几个小时？
+
+
+
+#### MySQL 5.5版本的并行复制策略
+
+##### 按表分发策略
+
+
+
+##### 按行分发策略
+
+
+
+#### MySQL 5.6版本的并行复制策略
+
+
+
+#### MariaDB的并行复制策略
+
+
+
+
+
+#### MySQL 5.7的并行复制策略
+
+
+
+
+
+#### MySQL 5.7.22的并行复制策略
+
+
+
+
+
+### 27 主库出问题了，从库怎么办？
+
+#### 基于位点的主备切换
+
+
+
+#### GTID
+
+
+
+#### 基于GTID的主备切换
+
+
+
+#### GTID和在线DDL
+
+
+
+### 28 读写分离有哪些坑？
+
+
+
+#### 强制走主库方案
+
+
+
+
+
+#### Sleep 方案
+
+
+
+#### 判断主备无延迟方案
+
+
+
+
+
+#### 配合semi-sync
+
+
+
+
+
+#### 等主库位点方案
+
+
+
+
+
+#### GTID方案
+
+
+
+
+
+
+
+### 29 如何判断一个数据库是不是出问题了？
+
+#### select 1判断
+
+
+
+
+
+#### 查表判断
+
+
+
+#### 更新判断
+
+
+
+#### 内部统计
+
+
+
+
+
+### 30 用动态的观点看加锁
+
+
+
+
+
+### 31 误删数据后除了跑路，还能怎么办？
+
+#### 误删行
+
+
+
+#### 误删库/表
+
+
+
+#### 延迟复制备库
+
+
+
+#### 预防误删库/表的方法
+
+
+
+#### rm删除数据
+
+
+
+
+
+### 32 为什么还有kill不掉的语句？
+
+#### 收到kill以后，线程做什么？
+
+
+
+
+
+
+
+### 33 我查这么多数据，会不会把数据库内存打爆？
+
+
+
+#### 全表扫描对server层的影响
+
+
+
+
+
+#### 全表扫描对InnoDB的影响
+
+
+
+
+
+### 34 到底可不可以使用join？
+
+
+
+```mysql
+CREATE TABLE `t2` (
+  `id` int(11) NOT NULL,
+  `a` int(11) DEFAULT NULL,
+  `b` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `a` (`a`)
+) ENGINE=InnoDB;
+
+drop procedure idata;
+delimiter ;;
+create procedure idata()
+begin
+  declare i int;
+  set i=1;
+  while(i<=1000)do
+    insert into t2 values(i, i, i);
+    set i=i+1;
+  end while;
+end;;
+delimiter ;
+call idata();
+
+create table t1 like t2;
+insert into t1 (select * from t2 where id<=100)
+```
+
+
+
+
+
+
+
+### 35 join语句怎么优化？
+
+```mysql
+create table t1(id int primary key, a int, b int, index(a));
+create table t2 like t1;
+drop procedure idata;
+delimiter ;;
+create procedure idata()
+begin
+  declare i int;
+  set i=1;
+  while(i<=1000)do
+    insert into t1 values(i, 1001-i, i);
+    set i=i+1;
+  end while;
+  
+  set i=1;
+  while(i<=1000000)do
+    insert into t2 values(i, i, i);
+    set i=i+1;
+  end while;
+
+end;;
+delimiter ;
+call idata();
+```
+
+
+
+#### Multi-Range Read优化
+
+
+
+
+
+#### Batched Key Access
+
+
+
+
+
+#### BNL算法的性能问题
+
+
+
+#### BNL转BKA
+
+
+
+#### 扩展-hash join
+
+
+
+
+
+### 36 为什么临时表可以重名？
+
+
+
+#### 临时表的特性
+
+
+
+#### 临时表的应用
+
+
+
+#### 为什么临时表可以重名？
+
+
+
+#### 临时表和主备复制
+
+
+
+### 37 什么时候会使用内部临时表？
+
+
+
+#### union 执行流程
+
+
+
+#### group by 执行流程
+
+
+
+#### group by 优化方法 --索引
+
+
+
+#### group by优化方法 --直接排序
+
+
+
+
+
+### 38 都说InnoDB好，那还要不要使用Memory引擎？
+
+#### 内存表的数据组织结构
+
+
+
+#### hash索引和B-Tree索引
+
+
+
+
+
+#### 内存表的锁
+
+
+
+#### 数据持久性问题
+
+
+
+
+
+### 39 自增主键为什么不是连续的？
+
+#### 自增值保存在哪儿？
+
+
+
+
+
+#### 自增值修改机制
+
+
+
+#### 自增值的修改时机
+
+
+
+#### 自增锁的优化
+
+
+
+
+
+### 40 insert语句的锁为什么这么多？
+
+#### insert … select 语句
+
+
+
+
+
+#### insert 循环写入
+
+
+
+
+
+#### insert 唯一键冲突
+
+
+
+
+
+#### insert into … on duplicate key update
+
+
+
+
+
+### 41 怎么最快地复制一张表？
+
+
+
+#### mysqldump方法
+
+
+
+#### 导出CSV文件
+
+
+
+#### 物理拷贝方法
+
+
+
+
+
+### 42 grant之后要跟着flushprivileges吗？
+
+
+
+#### 全局权限
+
+
+
+
+
+#### db权限
+
+
+
+#### 表权限和列权限
+
+
+
+#### flush privileges使用场景
+
+
+
+
+
+### 43 要不要使用分区表？
+
+#### 分区表是什么？
+
+```mysql
+CREATE TABLE `t` (
+  `ftime` datetime NOT NULL,
+  `c` int(11) DEFAULT NULL,
+  KEY (`ftime`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1
+PARTITION BY RANGE (YEAR(ftime))
+(PARTITION p_2017 VALUES LESS THAN (2017) ENGINE = InnoDB,
+ PARTITION p_2018 VALUES LESS THAN (2018) ENGINE = InnoDB,
+ PARTITION p_2019 VALUES LESS THAN (2019) ENGINE = InnoDB,
+PARTITION p_others VALUES LESS THAN MAXVALUE ENGINE = InnoDB);
+insert into t values('2017-4-1',1),('2018-4-1',1);
+
+    
+```
+
+
+
+#### 分区表的引擎层行为
+
+
+
+
+
+#### 分区策略
+
+
+
+#### 分区表的server层行为
+
+
+
+
+
+#### 分区表的应用场景
+
+
+
+
+
+
+
+### 自增id用完怎么办？
+
+
+
+#### 表定义自增值id
+
+
+
+#### InnoDB系统自增row_id
+
+
+
