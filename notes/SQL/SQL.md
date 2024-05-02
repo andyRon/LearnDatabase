@@ -612,3 +612,124 @@ Order By employee_id;
 
 
 
+## 牛客
+
+### [SQL18 分组计算练习题](https://www.nowcoder.com/practice/009d8067d2df47fea429afe2e7b9de45?tpId=199&tqId=1975670&ru=/exam/oj&qru=/ta/sql-quick-study/question-ranking&sourceUrl=%2Fexam%2Foj%3Fpage%3D1%26tab%3DSQL%E7%AF%87%26topicId%3D199)
+
+```mysql
+SELECT gender, university, COUNT(*) as user_num, 
+AVG(active_days_within_30) as avg_active_days,
+AVG(question_cnt) as avg_question_cnt
+FROM user_profile
+GROUP BY gender, university;
+```
+
+
+
+### [**SQL19** **分组过滤练习题**](https://www.nowcoder.com/practice/ddbcedcd9600403296038ee44a172f2d?tpId=199&tags=&title=&difficulty=0&judgeStatus=0&rp=0&sourceUrl=%2Fexam%2Foj%3Fpage%3D1%26tab%3DSQL%25E7%25AF%2587%26topicId%3D199)
+
+```mysql
+SELECT university, AVG(question_cnt) as avg_question_cnt,
+AVG(answer_cnt) as avg_answer_cnt
+FROM user_profile 
+GROUP BY university
+having avg_question_cnt < 5 OR avg_answer_cnt < 20
+;
+-- **where在数据分组前进行过滤，having在数据分组后进行过滤**
+```
+
+
+
+### [**SQL21** **浙江大学用户题目回答情况**](https://www.nowcoder.com/practice/55f3d94c3f4d47b69833b335867c06c1?tpId=199&tags=&title=&difficulty=0&judgeStatus=0&rp=0&sourceUrl=%2Fexam%2Foj%3Fpage%3D1%26tab%3DSQL%25E7%25AF%2587%26topicId%3D199)
+
+```mysql
+# SELECT qpd.device_id, qpd.question_id, qpd.result
+# FROM user_profile up, question_practice_detail qpd
+# WHERE up.university = "浙江大学" and up.device_id = qpd.device_id;
+
+SELECT device_id, question_id, result
+FROM question_practice_detail qpd
+WHERE device_id = (SELECT device_id 
+                  FROM user_profile
+                  WHERE university = "浙江大学");
+```
+
+
+
+### [**SQL22** **统计每个学校的答过题的用户的平均答题数**](https://www.nowcoder.com/practice/88aa923a9a674253b861a8fa56bac8e5?tpId=199&tags=&title=&difficulty=0&judgeStatus=0&rp=0&sourceUrl=%2Fexam%2Foj%3Fpage%3D1%26tab%3DSQL%25E7%25AF%2587%26topicId%3D199)
+
+```mysql
+SELECT university, 
+COUNT(q.question_id)/COUNT(DISTINCT u.device_id) as avg_answer_cnt
+FROM user_profile u JOIN question_practice_detail q 
+ON u.device_id = q.device_id
+GROUP BY university;
+```
+
+
+
+### [**SQL23** **统计每个学校各难度的用户平均刷题数**](https://www.nowcoder.com/practice/5400df085a034f88b2e17941ab338ee8?tpId=199&tags=&title=&difficulty=0&judgeStatus=0&rp=0&sourceUrl=%2Fexam%2Foj%3Fpage%3D1%26tab%3DSQL%25E7%25AF%2587%26topicId%3D199)
+
+```mysql
+SELECT 
+    university, 
+    difficult_level, 
+    round( count(qpd.question_id)/count(distinct qpd.device_id), 4 ) as avg_answer_cnt
+FROM question_practice_detail qpd
+Left Join user_profile up
+On up.device_id = qpd.device_id
+Left Join question_detail qd
+On qpd.question_id = qd.question_id
+GROUP BY university, difficult_level
+```
+
+
+
+### [**SQL28** **计算用户8月每天的练题数量**](https://www.nowcoder.com/practice/847373e2fe8d47b4a2c294bdb5bda8b6?tpId=199&tqId=1975680&ru=%2Fpractice%2Ff4714f7529404679b7f8909c96299ac4&qru=%2Fta%2Fsql-quick-study%2Fquestion-ranking&sourceUrl=%2Fexam%2Foj%3Fpage%3D1%26tab%3DSQL%25E7%25AF%2587%26topicId%3D199)
+
+```mysql
+SELECT DAY(date) AS day, COUNT(question_id) AS question_cnt
+FROM question_practice_detail
+WHERE YEAR(date) = 2021 and MONTH(date) = 08
+GROUP BY DAY;
+```
+
+
+
+### [**SQL30** **统计每种性别的人数**](https://www.nowcoder.com/practice/f04189f92f8d4f6fa0f383d413af7cb8?tpId=199&tags=&title=&difficulty=0&judgeStatus=0&rp=0&sourceUrl=%2Fexam%2Foj%3Fpage%3D1%26tab%3DSQL%25E7%25AF%2587%26topicId%3D199)
+
+```mysql
+SELECT SUBSTRING_INDEX(profile, ',', -1) AS gender, COUNT(device_id) as number
+FROM user_submit
+GROUP BY gender;
+```
+
+
+
+### [**SQL31** **提取博客URL中的用户名**](https://www.nowcoder.com/practice/26c8715f32e24d918f15db69518f3ad8?tpId=199&tags=&title=&difficulty=0&judgeStatus=0&rp=0&sourceUrl=%2Fexam%2Foj%3Fpage%3D1%26tab%3DSQL%25E7%25AF%2587%26topicId%3D199)
+
+```mysql
+SELECT device_id, SUBSTRING_INDEX(blog_url, '/', -1) AS user_name
+From user_submit;
+```
+
+
+
+### [**SQL32** **截取出年龄**](https://www.nowcoder.com/practice/b8d8a87fe1fc415c96f355dc62bdd12f?tpId=199&tags=&title=&difficulty=0&judgeStatus=0&rp=0&sourceUrl=%2Fexam%2Foj%3Fpage%3D1%26tab%3DSQL%25E7%25AF%2587%26topicId%3D199)
+
+```mysql
+SELECT SUBSTRING_INDEX(SUBSTRING_INDEX(profile, ',', -2),',',1) as age, 
+COUNT(device_id) as number 
+From user_submit
+GROUP BY age;
+```
+
+### [**SQL39** **21年8月份练题总数**](https://www.nowcoder.com/practice/b8f30b239b454ed490367b53ea95607d?tpId=199&tags=&title=&difficulty=0&judgeStatus=0&rp=0&sourceUrl=%2Fexam%2Foj%3Fpage%3D1%26tab%3DSQL%25E7%25AF%2587%26topicId%3D199)
+
+```mysql
+SELECT COUNT(DISTINCT device_id) AS did_cnt, COUNT(question_id) as question_cnt
+FROM question_practice_detail
+WHERE Year(`date`) = 2021 and Month(`date`) = 8;
+# WHERE DATE_FORMAT(`date`, '%Y-%m') = '2021-08';
+```
+
