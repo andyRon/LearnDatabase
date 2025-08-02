@@ -6044,16 +6044,32 @@ redo日志占用的磁盘空问在它对应的脏页己经被刷新到磁盘后�
 
 #### 分配事务id的时机
 
+事务分为只读事务和读写事务。
+
+```mysql
+Start Transaction Read Only
+
+Start Transaction Read Write
+-- 默认开启的事务也是读写事务
+Begin
+Start Transaction
+```
+
 如果某个事务在执行过程中对某个表执行了增删改操作，那么InnoDB就会给它分配一个独一无二的事务id。
+
+- 对于只读事务来说，只有**在它第一次对某个用户创建的临时表执行增删改操作时**，才会为这个事务分配一个事务id，否则是不分配事务id的。
+- 对于读写事务来说，只有在它第一次对某个表（包括用户创建的临时表）执行增删改操作时，才会这个事务分配一个事务id，否则是不分配事务id 的。
 
 #### 事务id是怎么生成的
 
+事务id本质是一个数字，它的分配策略与之前提到的`row_id`类似：
+
 - 服务器会在内存中维护一个全局变量，每当需要为某个事务分配事务id时，就会把该变量的值当作事务 id 分配给该事务，并且把该变量自增1。
 
-- ﻿每当这个变量的值为 256 的倍数时，就会将该变量的值刷新到系统表空间中页号为5的页面中一个名为**Max Trx ID**的属性中，这个属性占用8字节的存储空间。
+- ﻿每当这个变量的值为256的倍数时，就会将该变量的值刷新到系统表空间中页号为`5`的页面中一个名为**==Max Trx ID==**的属性中，这个属性占用8字节的存储空间。
 - ﻿当系统下一次重新启动时，会将这个**Max Trx ID**属性加载到内存中，将该值加上256之后赋值给前面提到的全局变量（因为在上次关机时，该全局变量的值可能大于磁盘页面中的**Max Trx ID**属性值）。
 
-这样就可以保证整个系统中分配的事务 id值是一个递增的数字。先分配事务计的事务得到的是较小的事务 id，后分配事务id的事务得到的是较大的事务id。
+这样就可以保证整个系统中分配的事务id值是一个递增的数字。先分配事务计的事务得到的是较小的事务 id，后分配事务id的事务得到的是较大的事务id。
 
 #### trx_id隐藏列
 
@@ -6065,7 +6081,19 @@ redo日志占用的磁盘空问在它对应的脏页己经被刷新到磁盘后�
 
 `trx_id`就是对这个聚簇索引记录进行改动的语句所在的事务对应的事务id。
 
+> `row_id` 和 `trx_id` 是InnoDB存储引擎为每条记录可能自动添加的隐藏字段，其物理存储存储在真实数据位置（具体位置不不同行格式可能不同）。
+
 ### 20.3 undo日志的格式
+
+为了实现事务的原子性，InnoDB 存储引擎在实际进行记录的增删改操作时，都需要先把对应的undo 日志记下来。**一般每对一条记录进行一次改动，就对应着一条 undo 日志**。但在某些更新记录的操作中，也可能会对应着2条 undo 日志。
+
+一个事务在执行过程中可能新增、删除、更新若干条记录，也就是说需要记录很多条对应的 undo 日志。
+
+这些 undo 日志会从0开始编号，也就是说根据生成的顺序分别称为第0号 undo 日志、第1号undo 日志⋯••第n号 undo 日志等。这个编号也称为`undo no`。
+
+这些undo日志被记录到类型为 `FIL_PAGE_UNDO_LOG`（对应的十六进制是 0x0002，数据页File Header结构的`FIL_PAGE_TYPE`）的页面中。这些页面可以从系统表空间中分配，也可以从一种专门存放 undo 日志的表空间（也就是 `undo tablespace`）中分配。
+
+关于如何分配存储 undo 日志的页面，稍后再说，现在先来看看**不同操作都会产生什么样的 undo 日志**。
 
 ```mysql
 Create Table undo_demo (
@@ -6077,29 +6105,151 @@ Create Table undo_demo (
 ) Engine=InnoDB Charset=utf8;
 ```
 
-`FIL_PAGE_UNDO_LOG`
-
-
+每个表都会被分配一个唯一的table id，查看方式：
 
 ```mysql
-Select * From information_schema.innodb_tables Where name = 'xiaohaizi/undo_demo';
+mysql> Select * From information_schema.innodb_tables Where name = 'xiaohaizi/undo_demo';
++----------+---------------------+------+--------+-------+------------+---------------+------------+--------------+--------------------+
+| TABLE_ID | NAME                | FLAG | N_COLS | SPACE | ROW_FORMAT | ZIP_PAGE_SIZE | SPACE_TYPE | INSTANT_COLS | TOTAL_ROW_VERSIONS |
++----------+---------------------+------+--------+-------+------------+---------------+------------+--------------+--------------------+
+|     1076 | xiaohaizi/undo_demo |   33 |      6 |    14 | Dynamic    |             0 | Single     |            0 |                  0 |
++----------+---------------------+------+--------+-------+------------+---------------+------------+--------------+--------------------+
+1 row in set (0.03 sec)
 ```
 
+> MySQL 8.0.3+：移除了过时的 `INNODB_SYS_*` 前缀视图（如 `INNODB_SYS_TABLES`），统一改为 `INNODB_*` 命名（如 `INNODB_TABLES`）。
 
+|   **字段名**    | **数据类型** |                           **描述**                           |
+| :-------------: | :----------: | :----------------------------------------------------------: |
+|   `TABLE_ID`    |    BIGINT    |                   表唯一 ID（实例级唯一）                    |
+|     `NAME`      | VARCHAR(255) |         表名（格式 `database/table`，如 `test/t1`）          |
+|     `FLAG`      |     INT      | 表特性位掩码（含行格式、压缩、是否使用 `DATA DIRECTORY` 等） |
+|    `N_COLS`     |     INT      |      表列数（含隐藏列 `row_id`、`trx_id`、`roll_ptr`）       |
+|     `SPACE`     |    BIGINT    |    表空间 ID（0=系统表空间；非 0=独立表空间 `.ibd` 文件）    |
+|                 |              |                                                              |
+|  `ROW_FORMAT`   | VARCHAR(12)  |              行格式（如 `Dynamic`、`Compact`）               |
+| `ZIP_PAGE_SIZE` |     INT      |                  压缩页大小（非压缩表为 0）                  |
+|  `SPACE_TYPE`   | VARCHAR(10)  |    表空间类型（`Single`=独立表空间；`System`=系统表空间）    |
 
-#### Insert操作对应的undo日志
+#### 20.3.1 Insert操作对应的undo日志
+
+当向表中插入一条记录时会有**乐观插入**和**悲观插入**的区分。但是不管怎么插入，最终导致的结果就是这条记录被放到了一个数据页中。
+
+如果希望回滚这个插入操作，那么把这条记录删除就好了。也就是说，在写对应的undo 日志时，只要把这条记录的主键信息记上就好了。
+
+所以设计者设计了一个类型为`TRX_UNDO_INSERT_REC`的 undo 日志，它的完整结构如图20-2所示。
 
 ![](images/image-20220414104645892.png)
 
-#### Delete操作对应的undo日志
+- undo no在一个事务中是从0开始递增的。也就是说，只要事务没提交，每生成一条undo 日志，那么该条日志的undo no就增1。
+
+- 如果记录中的主键只包含一列，那么在类型`TRX_UNDO_INSERT_REC`的undo日志中，只需把该列占用的存储空间大小和真实值记录下来。如果记录中的主键包含多个列，那么每个列占用的存储空间大小和对应的真实值都需要记录下来（图20-2中的`len`就代表列占用的存储空间大小；`value`代表列的真实值）。
+
+> 当向某个表中插入一条记录时，实际上需要**向聚簇索引和所有二级索引都插入一条记录**。
+>
+> 不过在记录undo日志时，只需要针对聚簇索引记录来记录一条undo日志就好了，聚簇索引记录和二级索引记录是一一对应的，在回滚INSERT操作时，只需要知道这条记录的主键信息，然后根据主键信息进行对应的删除操作。在执行删除操作时，就会把聚簇索引和所有一级索引中相应的记录都删掉。后面说到的DELETE 操作和 UPDATE 操作也是针对聚簇索引记录的改动来记录 undo 日志的，之后就不强调了。
+
+现在向`undo_demo`表中插入两条记录：
+
+```mysql
+BEGIN;	 #显式开启一个事务，假设该事务的事务id为100
+
+# 插入两条记录
+INSERT INTO undo_demo (id, keyl, col)
+	VALUES (1, 'AW4', '狙击枪'), (2, 'M416', '步枪');
+```
+
+因为记录的主键只包含一个id列，所以在对应的undo 日志中只需要将待插入记录的过d列占用的存储空间长度（id列的类型为 INT，而 INT 类型占用的存储空间长度为4字节）和真实值记录下来。本例中插入了两条记录，所以会产生两条类型为 TRX_UNDO_IINSERT_REC的 undo 日志。
+
+- 第1条undo 日志的 undo no 为0，记录主键占用的存储空间长度为4，真实值为1，如图20-3所示。
+
+![](images/image-20250802172438304.png)
+
+- 第2条undo 日志的undo no 为1，记录主键占用的存储空间长度为4，真实值为2，如图20-4所示（与第1条 undo日志对比，可以发现undo no和主键各列信息均有不同）。
+
+> 与为了节省redo日志占用的存储空间而使用的方法类似，设计者对undo 日志中的某些属性进行了压缩处理，最大限度地节省 undo 日志占用的存储空间。
+
+![](images/image-20250802172633508.png)
+
+`roll_pointer`这个占用7字节的字段本质上就是一个指向记录对应的undo日志的指针。比如，在前面向undo_demo表中插入了2条记录，就意味着向聚簇索引和二级索引idx_key1中分别插入了2条记录，不过只需要针对聚簇索引来记录 undo 日志就好了。聚簇索引记录存放到类型为 `FIL_PAGE_INDEX`的页面中（就是前边一直所说的数据页），undo日志存放到类型为`FIL_PAGE_UNDO_LOG`的页面中。最终效果如图20-5所示。
+
+![图20-5 聚簇索引记录和undo日志的存放位置](images/图20-5 聚簇索引记录和undo日志的存放位置.png)
+
+从上图可以直观看出，roll_pointer本质上就是一个指针，指向记录对应的undo日志。
+
+#### 20.3.2 Delete操作对应的undo日志
+
+![](images/image-20250802180921678.png)
 
 
 
-#### Update操作对应的undo日志
+![](images/image-20250802180947138.png)
 
 
 
-#### 增删改操作对二级索引的影响
+![](images/image-20250802181016901.png)
+
+
+
+
+
+![](images/image-20250802181041894.png)
+
+
+
+![](images/image-20250802181109206.png)
+
+
+
+
+
+![](images/image-20250802181137220.png)
+
+
+
+
+
+![](images/image-20250802181158880.png)
+
+
+
+
+
+#### 20.3.3 Update操作对应的undo日志
+
+##### 1 不更新主键
+
+
+
+
+
+
+
+
+
+
+
+![](images/image-20250802181400924.png)
+
+
+
+
+
+##### 2 更新主键
+
+
+
+![](images/image-20250802181520681.png)
+
+
+
+
+
+#### 20.3.4 增删改操作对二级索引的影响
+
+
+
+
 
 
 
@@ -6113,6 +6263,8 @@ Select * From information_schema.innodb_tables Where name = 'xiaohaizi/undo_demo
 
 
 
+
+
 ### 20.5 FIL_PAGE_UNDO_LOG页面
 
 `FIL_PAGE_UNDO_LOG`类型的页面是**专门用来存储undo日志的**，简称==Undo页面==。
@@ -6121,13 +6273,53 @@ Select * From information_schema.innodb_tables Where name = 'xiaohaizi/undo_demo
 
 
 
+
+
+![](images/image-20250802181630162.png)
+
+其中各个属性的意思：
+
+- `TRX_UNDO_PAGE_TYPE`： 本页面准备存储什么类型的 undo 日志。undo日志可以被分为两个大类。
+  - TRX_UNDO_INSERT（使用十进制1表示）：类型为 TRX_UNDO_INSERT_REC的undo 日志属于这个大类，一般由 INSERT 语句产生；当UPDATE 语句中有更新主键的情况时也会产生此类型的 undo 日志。我们把属于这个 TRX_UNDO_INSERT 大类的 undo 日志简称 **insert undo日志**。
+  - ﻿﻿TRX_UNDO_UPDATE（使用十进制2表示），除了类型为 TRX_UNDO_INSERT_REC 的undo 日志，其他类型的 undo 日志都属于这个大类，比如前面说的TRX_UNDO_DEL_MARK_REC、TRX_UNDO_UPD_EXIST_REC等。一般由DELETE_UPDATE语句产生的undo 日志属于这个大类。把属于这个 TRX_UNDO_UPDATE 大类的 undo 日志简称 **update undo日志**。
+
+这个`TRX_UNDO_PAGE_TYPE`属性的可选值就是上面这两个，用来标记本页面用于存储哪个大类的undo 日志。不同大类的 undo 日志不能混着存储，比如一个Undo 页面的TRX_UNDO_PAGE_TYPE 属性值为 TRX_UNDO_INSERT，那么这个页面就只能存储类型为TRX_UNDO_INSERT_REC的undo 日志，其他类型的undo 日志就不能放到这个页面中了。
+
+
+
+- `TRX_UNDO_PAGE_START`：表示在当前页面中从什么位置开始存储 undo 日志，或者说表示第一条 undo 日志在本页面中的起始偏移量。
+
+- `TRX_UNDO_PAGE_FREE`： 与上面的 TRX_UNDO_PAGE_START 对应，表示当前页面中存储的最后一条 undo 日志结束时的偏移量；或者说从这个位置开始，可以继续写入新的 undo 日志。
+
+
+
+- `TRX_UNDO_PAGE_NODE`：代表一个链表节点结构。
+
 ### 20.6 Undo页面链表
 
 #### 单个事务中的Undo页面链表
 
 ![](images/image-20230528230955420.png)
 
+
+
+
+
+![](images/image-20250802182255468.png)
+
+
+
+![](images/image-20250802182313707.png)
+
+
+
+
+
 #### 多个事务中的Undo页面链表
+
+
+
+![](images/image-20250802182336065.png)
 
 
 
@@ -6159,13 +6351,31 @@ Select * From information_schema.innodb_tables Where name = 'xiaohaizi/undo_demo
 
 
 
+![](images/image-20250802182456622.png)
+
+
+
+![](images/image-20250802182540137.png)
+
+
+
 ### 20.9 回滚段
 
 #### 回滚段的概念
 
 
 
+![](images/image-20250802182607956.png)
+
+
+
+
+
 #### 从回滚段中申请Undo页面链表
+
+
+
+
 
 
 
@@ -6176,6 +6386,8 @@ Select * From information_schema.innodb_tables Where name = 'xiaohaizi/undo_demo
 ![](images/image-20230528232134827.png)
 
 #### 回滚段的分类
+
+
 
 
 
@@ -6349,7 +6561,13 @@ Select @@transaction_isolation;
 - `trx_id`：一个事务每次对某条聚簇索引记录进行改动时，都会把该事务的事务id赋值给这个隐藏列。
 - `roll_pointer`：每次对某条聚簇索引记录进行改动时，都会把旧的版本写入到undo日志。这个隐藏列相当于一个指针，可通过它找到该记录修改前的信息。
 
-**多版本并发控制（Multi-Version Concurrency COntrol，MVCC）**
+
+
+![](images/image-20250802183534325.png)
+
+
+
+**多版本并发控制（Multi-Version Concurrency Control，MVCC）**
 
 
 
@@ -6382,6 +6600,8 @@ ReadView（“一致性试图”）包含：
 
 
 
+
+
 ##### 2.Repeatable Read——在第一次读取数据时生成一个ReadView
 
 
@@ -6394,9 +6614,13 @@ ReadView（“一致性试图”）包含：
 
 - 步骤2：利用二级索引记录中的主键值进行回表操作，得到对应的聚簇索引记录后再按照前面讲过的方式找到对该 ReadView 可见的第一个版本，然后判断该版本中相应的二级索引列的值是否与利用该二级素引查询时的值相同。本例中就是判断找到的第一个可见版本的 name 值是不是，‘刘备’。如果是，就把这条记录发送给客户端（如果WHERE 子句中还有其他搜素条件的话还需继续判断），否则就跳过该记录。
 
+
+
 #### MVCC小结
 
 MVCC指在使用Read Committed、Repeatable Read这两种隔离级别的事务执行普通的Select操作时，访问记录的版本链的过程。
+
+
 
 ### 21.4 关于purge 🔖
 
